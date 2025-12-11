@@ -1,181 +1,170 @@
-import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-import 'package:airsense_5g/models/health_profile_model.dart';
-import 'package:airsense_5g/services/health_profile_service.dart';
 import 'package:airsense_5g/models/user_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
-  AuthService._internal() {
-    _seedDummyUser();
-  }
+  AuthService._internal();
 
-  final _uuid = const Uuid();
+  final firebase_auth.FirebaseAuth _auth = firebase_auth.FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> _seedDummyUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final existingUsers = prefs.getStringList('users') ?? [];
-    bool exists = false;
-
-    for (final userStr in existingUsers) {
-      final user = User.fromJson(jsonDecode(userStr));
-      if (user.email == 'sravya@gmail.com') {
-        exists = true;
-        break;
-      }
-    }
-
-    if (!exists) {
-      final user = User(
-        id: 'dummy_user_id',
-        name: 'Sravya',
-        email: 'sravya@gmail.com',
-        createdAt: DateTime.now(),
-      );
-      existingUsers.add(jsonEncode(user.toJson()));
-      await prefs.setStringList('users', existingUsers);
-      await prefs.setString('password_sravya@gmail.com', 'HIi@123');
-      debugPrint('✅ Dummy user seeded: sravya@gmail.com');
-
-      // Seed dummy health profile
-      final healthService = HealthProfileService();
-      if (!await healthService.hasProfile(user.id)) {
-        final profile = HealthProfile(
-          userId: user.id,
-          age: 25,
-          gender: 'Female',
-          activityLevel: 'Moderate',
-          pollutionSensitivity: 'Medium',
-          conditions: ['Asthma'],
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-        await healthService.createProfile(profile);
-        debugPrint('✅ Dummy health profile seeded');
-      }
-    }
-  }
-
+  // Sign up with Email and Password
   Future<Map<String, dynamic>> signup(
       String name, String email, String password) async {
     try {
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      final normalizedEmail = email.toLowerCase().trim();
-      final prefs = await SharedPreferences.getInstance();
-      final existingUsers = prefs.getStringList('users') ?? [];
-
-      for (final userStr in existingUsers) {
-        final user = User.fromJson(jsonDecode(userStr));
-        if (user.email == normalizedEmail) {
-          throw Exception('Email already exists');
-        }
-      }
-
-      final user = User(
-        id: _uuid.v4(),
-        name: name,
-        email: normalizedEmail,
-        createdAt: DateTime.now(),
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
       );
 
-      existingUsers.add(jsonEncode(user.toJson()));
-      await prefs.setStringList('users', existingUsers);
+      final firebaseUser = userCredential.user;
+      if (firebaseUser != null) {
+        // Create our local User model
+        final user = User(
+          id: firebaseUser.uid,
+          name: name,
+          email: email,
+          createdAt: DateTime.now(),
+        );
 
-      await prefs.setString('password_${user.email}', password);
+        // Store user details in Firestore (Don't await this to prevent UI freezing if DB is slow)
+        _firestore
+            .collection('users')
+            .doc(user.id)
+            .set(user.toJson())
+            .then((_) {
+          debugPrint('✅ User metadata saved to Firestore');
+        }).catchError((e) {
+          debugPrint('⚠️ Firestore write failed (non-critical): $e');
+        });
 
-      final token = _uuid.v4();
-      await prefs.setString('jwt_token', token);
-      await prefs.setString('current_user_id', user.id);
+        // Cache locally
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('current_user_debug', user.id);
 
-      debugPrint('✅ User signed up: ${user.email}');
-
-      return {'success': true, 'user': user.toJson(), 'token': token};
+        debugPrint('✅ User signed up: ${user.email}');
+        return {
+          'success': true,
+          'user': user.toJson(),
+          'token': await firebaseUser.getIdToken()
+        };
+      }
+      return {'success': false, 'error': 'User creation failed'};
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      debugPrint('❌ Signup error: ${e.message}');
+      return {'success': false, 'error': e.message ?? 'Signup failed'};
     } catch (e) {
       debugPrint('❌ Signup error: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
 
+  // Login with Email and Password
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      await Future.delayed(const Duration(milliseconds: 800));
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      final normalizedEmail = email.toLowerCase().trim();
-      final prefs = await SharedPreferences.getInstance();
-      final existingUsers = prefs.getStringList('users') ?? [];
-
-      for (final userStr in existingUsers) {
-        final user = User.fromJson(jsonDecode(userStr));
-        if (user.email == normalizedEmail) {
-          final storedPassword = prefs.getString('password_${user.email}');
-          if (storedPassword == password) {
-            final token = _uuid.v4();
-            await prefs.setString('jwt_token', token);
-            await prefs.setString('current_user_id', user.id);
-
-            debugPrint('✅ User logged in: ${user.email}');
-
-            return {'success': true, 'user': user.toJson(), 'token': token};
-          } else {
-            throw Exception('Invalid password');
-          }
+      final firebaseUser = userCredential.user;
+      if (firebaseUser != null) {
+        // Fetch user details from Firestore (assumes we saved name during signup)
+        // Fetch user details from Firestore with timeout
+        DocumentSnapshot<Map<String, dynamic>>? userDoc;
+        try {
+          userDoc = await _firestore
+              .collection('users')
+              .doc(firebaseUser.uid)
+              .get()
+              .timeout(const Duration(seconds: 5));
+        } catch (e) {
+          debugPrint('⚠️ Firestore read timed out/failed: $e');
+          // userDoc remains null, triggering fallback below
         }
-      }
 
-      // If specific dummy user is not found, attempt to seed it on-the-fly and retry logic
-      if (normalizedEmail == 'sravya@gmail.com' && password == 'HIi@123') {
-        debugPrint('⚠️ Dummy user not found, forcing seed...');
-        await _seedDummyUser();
-        // Recursively call login or manually construct success response
-        final seededUsers = prefs.getStringList('users') ?? [];
-        for (final userStr in seededUsers) {
-          final user = User.fromJson(jsonDecode(userStr));
-          if (user.email == normalizedEmail) {
-            final token = _uuid.v4();
-            await prefs.setString('jwt_token', token);
-            await prefs.setString('current_user_id', user.id);
-            return {'success': true, 'user': user.toJson(), 'token': token};
-          }
+        Map<String, dynamic> userData;
+        if (userDoc != null && userDoc.exists) {
+          userData = userDoc.data()!;
+        } else {
+          // Fallback if no firestore doc exists
+          userData = {
+            'id': firebaseUser.uid,
+            'name': firebaseUser.displayName ?? email.split('@')[0],
+            'email': email,
+            'createdAt': DateTime.now().toIso8601String(),
+          };
         }
-      }
 
-      throw Exception('User not found');
+        debugPrint('✅ User logged in: ${firebaseUser.email}');
+        return {
+          'success': true,
+          'user': userData,
+          'token': await firebaseUser.getIdToken()
+        };
+      }
+      return {'success': false, 'error': 'Login failed'};
+    } on firebase_auth.FirebaseAuthException catch (e) {
+      debugPrint('❌ Login error: ${e.message}');
+      return {'success': false, 'error': e.message ?? 'Login failed'};
     } catch (e) {
       debugPrint('❌ Login error: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
 
+  // Check if logged in
   Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
-    return token != null;
+    return _auth.currentUser != null;
   }
 
+  // Get Current User
   Future<User?> getCurrentUser() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('current_user_id');
-      if (userId == null) return null;
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) return null;
 
-      final existingUsers = prefs.getStringList('users') ?? [];
-      for (final userStr in existingUsers) {
-        final user = User.fromJson(jsonDecode(userStr));
-        if (user.id == userId) {
-          return user;
-        }
+    try {
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .get()
+          .timeout(const Duration(seconds: 3));
+      if (userDoc.exists) {
+        return User.fromJson(userDoc.data()!);
       }
-      return null;
+      // Fallback
+      return User(
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName ??
+            firebaseUser.email?.split('@')[0] ??
+            'User',
+        email: firebaseUser.email ?? '',
+        createdAt: DateTime.now(), // Approximate
+      );
     } catch (e) {
       debugPrint('❌ Get current user error: $e');
-      return null;
+      return User(
+        id: firebaseUser.uid,
+        name: 'User',
+        email: firebaseUser.email ?? '',
+        createdAt: DateTime.now(),
+      );
     }
   }
 
+  // Logout
+  Future<void> logout() async {
+    await _auth.signOut();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
+    debugPrint('✅ User logged out');
+  }
+
+  // --- Profile Image Helpers (Persisting to SharedPreferences for simplicity, or could use Storage) ---
   Future<String?> getProfileImage(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('profile_image_$userId');
@@ -184,13 +173,5 @@ class AuthService {
   Future<void> saveProfileImage(String userId, String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile_image_$userId', path);
-    debugPrint('✅ Profile image saved for $userId: $path');
-  }
-
-  Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
-    await prefs.remove('current_user_id');
-    debugPrint('✅ User logged out');
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:airsense_5g/models/chat_message_model.dart';
 import 'package:airsense_5g/services/auth_service.dart';
+import 'package:airsense_5g/services/bytez_service.dart';
 
 import 'package:airsense_5g/theme.dart';
 import 'package:intl/intl.dart';
@@ -79,39 +80,53 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _scrollToBottom();
 
-    // Simulate AI thinking delay
-    await Future.delayed(const Duration(milliseconds: 1000));
+    try {
+      // Prepare conversation history for the API
+      // We take the last few messages to maintain context without overloading tokens
+      final history = _messages
+          .where((m) => m.message.isNotEmpty || m.response.isNotEmpty)
+          .map((m) {
+        if (m.isUser) {
+          return {'role': 'user', 'content': m.message};
+        } else {
+          return {'role': 'assistant', 'content': m.response};
+        }
+      }).toList();
 
-    final botResponse = _getBotResponse(messageText);
+      // If history is empty (first message), Bytez might just take the current one,
+      // but since we added the user message to _messages above, it's already in 'history'.
 
-    if (mounted) {
-      setState(() {
-        _messages.add(ChatMessage(
-          id: 'bot_${DateTime.now().millisecondsSinceEpoch}',
-          userId: 'system',
-          message: '',
-          response: botResponse,
-          timestamp: DateTime.now(),
-          isUser: false,
-        ));
-        _isSending = false;
-      });
-      _scrollToBottom();
-    }
-  }
+      // Call Bytez API
+      final botResponse = await BytezService().sendMessage(history);
 
-  String _getBotResponse(String query) {
-    final q = query.toLowerCase();
-    if (q.contains("weather")) {
-      return "The weather is currently sunny with a temperature of 25°C. Humidity is at 60%.";
-    } else if (q.contains("safe") || q.contains("quality")) {
-      return "The current Air Quality Index (AQI) is around 156, which is Unhealthy. It is advisable to wear a mask outdoors.";
-    } else if (q.contains("health") || q.contains("recommendation")) {
-      return "1. Avoid outdoor activities.\n2. Wear an N95 mask.\n3. Keep windows closed.\n4. Use an air purifier if available.";
-    } else if (q.contains("pollutant")) {
-      return "Main pollutants today:\n• PM2.5: High\n• PM10: Moderate\n• NO2: Good";
-    } else {
-      return "I'm focusing on air quality data right now. Try determining the weather or checking health tips!";
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            id: 'bot_${DateTime.now().millisecondsSinceEpoch}',
+            userId: 'system',
+            message: '',
+            response: botResponse,
+            timestamp: DateTime.now(),
+            isUser: false,
+          ));
+          _isSending = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            id: 'error_${DateTime.now().millisecondsSinceEpoch}',
+            userId: 'system',
+            message: '',
+            response: 'Sorry, verification failed or service is unavailable.',
+            timestamp: DateTime.now(),
+            isUser: false,
+          ));
+          _isSending = false;
+        });
+      }
     }
   }
 

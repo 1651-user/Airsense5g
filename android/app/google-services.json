@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "404670781078",
+    "project_id": "airsense5g",
+    "storage_bucket": "airsense5g.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:404670781078:android:4b965f120b561f173f94b7",
+        "android_client_info": {
+          "package_name": "com.example.airsense5g"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "404670781078-8j9m0lg0957unch7ktsf1dkqe52cuth0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuzLj8EwLvaDJ2mZp2HMOQZP5q1ga0TcA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "404670781078-8j9m0lg0957unch7ktsf1dkqe52cuth0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "404670781078-3un746m9i6csg39johf2o1e7gluf8523.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.airsense5g"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
