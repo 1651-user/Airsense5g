@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "404670781078-ll4to0ij7bhuqlajakd2dn7uke8jscpg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.airsense5g",
+            "certificate_hash": "9a7022803755a2844630358009dbaa4e34950873"
+          }
+        },
+        {
           "client_id": "404670781078-8j9m0lg0957unch7ktsf1dkqe52cuth0.apps.googleusercontent.com",
           "client_type": 3
         }
