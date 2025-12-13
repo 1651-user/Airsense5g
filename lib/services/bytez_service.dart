@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 class BytezService {
   final Dio _dio = Dio();
@@ -31,32 +32,93 @@ class BytezService {
       if (response.statusCode == 200) {
         final data = response.data;
         if (data is Map && data.containsKey('output')) {
-          // The output from Bytez usually comes as a generated string or list depending on model
-          // For chat models receiving a list of messages, it typically returns the assistant's reply
-          final output = data['output'];
-          if (output is String) {
-            return output;
-          } else if (output is List && output.isNotEmpty) {
-            // Check if the list contains maps (which matches the screenshot showing {role: ..., content: ...})
-            final lastMessage = output.last;
-            if (lastMessage is Map) {
-              final content = lastMessage['content'];
-              if (content != null) return content.toString();
-            } else if (lastMessage is String) {
-              // Initial approach fallback
-              return lastMessage;
+          var output = data['output'];
+
+          // Helper to extract content from a dynamic object
+          String? extractContent(dynamic item) {
+            if (item is Map) {
+              return item['content']?.toString() ??
+                  item['response']?.toString();
             }
-            // Fallback: join if it's a list of strings
-            return output.join('\n');
+            return null;
           }
-          return output?.toString() ?? "No response";
+
+          // 1. Handle List
+          if (output is List && output.isNotEmpty) {
+            // Try to find the last meaningful message
+            var lastItem = output.last;
+            // Try to extract from Map directly
+            var content = extractContent(lastItem);
+            if (content != null) return content;
+
+            // If not a map, treats as string
+            if (lastItem is String) {
+              output = lastItem;
+            } else {
+              // convert to string and try to parse
+              output = lastItem.toString();
+            }
+          }
+
+          // 2. Handle String (or converted String)
+          if (output is String) {
+            var trimmed = output.trim();
+
+            // Recursively strip the {role: assistant, content: ...} wrapper
+            // The model seems to output nested structures or hallucinations of this format
+            // containing nested braces like {role: ... offset by {role: ...
+            // We loop to peel off every layer.
+            int safetyLoop = 0;
+            while (trimmed.startsWith('{') &&
+                trimmed.contains('role: assistant') &&
+                safetyLoop < 5) {
+              final contentIndex = trimmed.indexOf('content:');
+              if (contentIndex != -1) {
+                // Extract everything after 'content:'
+                // We add 8 for 'content:'.length
+                var extracted = trimmed.substring(contentIndex + 8).trim();
+
+                // Remove the trailing '}' if it matches the opening '{' for this wrapper
+                if (extracted.endsWith('}')) {
+                  extracted =
+                      extracted.substring(0, extracted.length - 1).trim();
+                }
+                trimmed = extracted;
+              } else {
+                // If we see the wrapper start but no content field, break to avoid infinite loop
+                break;
+              }
+              safetyLoop++;
+            }
+
+            // Aggressive Regex fallback if plain stripping didn't clean it (e.g. JSON style quotes)
+            final jsonMatch =
+                RegExp(r'"content":\s*"(.*?)"').firstMatch(trimmed);
+            if (jsonMatch != null) {
+              return jsonMatch.group(1) ?? trimmed;
+            }
+
+            // Fallback for Python-style dicts if they happen to use quotes
+            final simpleMatch =
+                RegExp(r"content:\s*['\u0022]?(.*?)['\u0022]?(?:,|})")
+                    .firstMatch(trimmed);
+            if (simpleMatch != null) {
+              return simpleMatch.group(1)?.trim() ?? trimmed;
+            }
+
+            // If it looks like code/JSON but regex failed, allow it to pass through
+            // rather than saying "I don't show", so we can at least see it.
+            return trimmed;
+          }
+
+          return output?.toString() ?? "Received empty response.";
         }
       }
 
-      return "Sorry, I couldn't get a response from the server.";
+      return "Sorry, I couldn't get a response from the server. (Status: ${response.statusCode})";
     } catch (e) {
-      print('Bytez API Error: $e');
-      return "Error: Unable to connect to AI service.";
+      debugPrint('Bytez API Error: $e');
+      return "Error: Unable to connect to AI service. ($e)";
     }
   }
 }

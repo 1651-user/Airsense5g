@@ -160,6 +160,45 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 Row(
+                  children: [
+                    Expanded(
+                        child: Divider(
+                            color:
+                                Theme.of(context).colorScheme.outlineVariant)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('OR',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.outline)),
+                    ),
+                    Expanded(
+                        child: Divider(
+                            color:
+                                Theme.of(context).colorScheme.outlineVariant)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _googleLogin,
+                  icon: Icon(Icons.public,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary), // TODO: Replace with Google Logo Asset
+                  label: Text('Sign in with Google'),
+                  style: OutlinedButton.styleFrom(
+                    padding: AppSpacing.verticalMd,
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.outline),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md)),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text("Don't have an account? ",
@@ -184,5 +223,27 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _googleLogin() async {
+    setState(() => _isLoading = true);
+
+    final authService = AuthService();
+    final result = await authService.signInWithGoogle();
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    if (result['success'] == true) {
+      Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainNavScreen()));
+    } else {
+      if (result['error'] != 'Google sign in cancelled') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result['error'] ?? 'Login failed'),
+            backgroundColor: Theme.of(context).colorScheme.error));
+      }
+    }
   }
 }

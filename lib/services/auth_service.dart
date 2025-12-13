@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:airsense_5g/models/user_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -117,6 +118,82 @@ class AuthService {
     }
   }
 
+  // Google Sign-In
+  Future<Map<String, dynamic>> signInWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        clientId: kIsWeb
+            ? '404670781078-8j9m0lg0957unch7ktsf1dkqe52cuth0.apps.googleusercontent.com'
+            : null,
+      );
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        return {'success': false, 'error': 'Google sign in cancelled'};
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final firebase_auth.OAuthCredential credential =
+          firebase_auth.GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final firebase_auth.UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
+      final firebaseUser = userCredential.user;
+
+      if (firebaseUser != null) {
+        // Fetch or create user in Firestore
+        DocumentSnapshot<Map<String, dynamic>>? userDoc;
+        try {
+          userDoc = await _firestore
+              .collection('users')
+              .doc(firebaseUser.uid)
+              .get()
+              .timeout(const Duration(seconds: 3));
+        } catch (e) {
+          debugPrint('⚠️ Firestore read timed out/failed: $e');
+        }
+
+        if (userDoc == null || !userDoc.exists) {
+          final user = User(
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName ?? 'User',
+            email: firebaseUser.email ?? '',
+            createdAt: DateTime.now(),
+          );
+
+          // Fire and forget save
+          _firestore
+              .collection('users')
+              .doc(user.id)
+              .set(user.toJson())
+              .onError((e, _) =>
+                  debugPrint('⚠️ Firestore write failed (non-critical): $e'));
+        }
+
+        // Cache details
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('current_user_debug', firebaseUser.uid);
+
+        return {
+          'success': true,
+          'user': {
+            'id': firebaseUser.uid,
+            'name': firebaseUser.displayName,
+            'email': firebaseUser.email
+          },
+          'token': await firebaseUser.getIdToken()
+        };
+      }
+      return {'success': false, 'error': 'Google sign in failed'};
+    } catch (e) {
+      debugPrint('❌ Google sign in error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   // Check if logged in
   Future<bool> isLoggedIn() async {
     return _auth.currentUser != null;
@@ -159,6 +236,18 @@ class AuthService {
   // Logout
   Future<void> logout() async {
     await _auth.signOut();
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        clientId: kIsWeb
+            ? '404670781078-8j9m0lg0957unch7ktsf1dkqe52cuth0.apps.googleusercontent.com'
+            : null,
+      );
+      if (await googleSignIn.isSignedIn()) {
+        await googleSignIn.signOut();
+      }
+    } catch (e) {
+      debugPrint('⚠️ Google sign out failed/not needed: $e');
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
     debugPrint('✅ User logged out');

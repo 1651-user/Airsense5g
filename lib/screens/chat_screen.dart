@@ -3,8 +3,8 @@ import 'package:airsense_5g/models/chat_message_model.dart';
 import 'package:airsense_5g/services/auth_service.dart';
 import 'package:airsense_5g/services/bytez_service.dart';
 
-import 'package:airsense_5g/theme.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -19,6 +19,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<ChatMessage> _messages = [];
   bool _isSending = false;
   String? _userId;
+  String? _userImage;
 
   final List<String> _suggestedQuestions = [
     "What is the weather today?",
@@ -36,8 +37,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadUser() async {
     final user = await AuthService().getCurrentUser();
+    String? image;
+    if (user != null) {
+      image = await AuthService().getProfileImage(user.id);
+    }
     if (user != null && mounted) {
-      setState(() => _userId = user.id);
+      setState(() {
+        _userId = user.id;
+        _userImage = image;
+      });
     }
   }
 
@@ -81,8 +89,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      // Prepare conversation history for the API
-      // We take the last few messages to maintain context without overloading tokens
       final history = _messages
           .where((m) => m.message.isNotEmpty || m.response.isNotEmpty)
           .map((m) {
@@ -93,10 +99,6 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }).toList();
 
-      // If history is empty (first message), Bytez might just take the current one,
-      // but since we added the user message to _messages above, it's already in 'history'.
-
-      // Call Bytez API
       final botResponse = await BytezService().sendMessage(history);
 
       if (mounted) {
@@ -144,125 +146,226 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        forceMaterialTransparency: true,
+        backgroundColor: Colors
+            .transparent, // Glassmorphism effect handled by body bg usually or transparent
+        elevation: 0,
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer, shape: BoxShape.circle),
+                gradient: LinearGradient(
+                  colors: [Colors.purple.shade400, Colors.blue.shade400],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.purple.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
               child:
-                  Icon(Icons.smart_toy, color: colorScheme.primary, size: 20),
+                  const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('AI Assistant',
+                Text('AirSense AI',
                     style: Theme.of(context)
                         .textTheme
                         .titleMedium
                         ?.copyWith(fontWeight: FontWeight.bold)),
-                Text('Online',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Colors.greenAccent)),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                          color: Colors.greenAccent, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('Online',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.grey)),
+                  ],
+                ),
               ],
             ),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: AppSpacing.paddingMd,
-              itemCount: _messages.length,
-              itemBuilder: (context, index) =>
-                  ChatBubble(message: _messages[index]),
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          // Subtle background gradient for premium feel
+          gradient: LinearGradient(
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surfaceContainer.withOpacity(0.5),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          if (_isSending)
-            Padding(
-              padding: AppSpacing.paddingMd,
-              child: Row(
-                children: [
-                  SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: colorScheme.primary)),
-                  const SizedBox(width: 8),
-                  Text('Typing...',
-                      style: TextStyle(
-                          color: colorScheme.onSurfaceVariant, fontSize: 12)),
-                ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(
+                    16, 100, 16, 16), // Top padding for AppBar
+                itemCount: _messages.length + (_isSending ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == _messages.length) {
+                    return _buildTypingIndicator();
+                  }
+                  return ChatBubble(
+                    message: _messages[index],
+                    userImage: _userImage,
+                  );
+                },
               ),
             ),
-          // Suggested Questions Chips
-          Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _suggestedQuestions.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                return ActionChip(
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  labelStyle: TextStyle(color: colorScheme.primary),
-                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
-                  label: Text(_suggestedQuestions[index]),
-                  onPressed: () => _sendMessage(_suggestedQuestions[index]),
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: AppSpacing.paddingMd,
-            decoration: BoxDecoration(
-                color: colorScheme.surface,
-                border: Border(
-                    top: BorderSide(
-                        color: colorScheme.outline.withOpacity(0.2)))),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      style: TextStyle(color: colorScheme.onSurface),
-                      decoration: InputDecoration(
-                        hintText: 'Ask specific questions...',
-                        hintStyle: TextStyle(
-                            color:
-                                colorScheme.onSurfaceVariant.withOpacity(0.7)),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: colorScheme.surfaceContainerHighest,
-                        contentPadding: AppSpacing.paddingMd,
+
+            // Input Area
+            SafeArea(
+              top: false,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  children: [
+                    // Suggestions
+                    SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _suggestedQuestions.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          return ActionChip(
+                            elevation: 0,
+                            backgroundColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            label: Text(_suggestedQuestions[index],
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface)),
+                            onPressed: () =>
+                                _sendMessage(_suggestedQuestions[index]),
+                          );
+                        },
                       ),
-                      maxLines: 1,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                        color: colorScheme.primary, shape: BoxShape.circle),
-                    child: IconButton(
-                      icon: Icon(Icons.send, color: colorScheme.onPrimary),
-                      onPressed: _isSending ? null : () => _sendMessage(),
+                    const SizedBox(height: 12),
+
+                    // Input Field
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextField(
+                              controller: _messageController,
+                              style: TextStyle(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface),
+                              decoration: const InputDecoration(
+                                hintText: 'Ask anything...',
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              textInputAction: TextInputAction.send,
+                              onSubmitted: (_) => _sendMessage(),
+                            ),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: _isSending
+                                    ? [Colors.grey, Colors.grey]
+                                    : [
+                                        Colors.purple.shade400,
+                                        Colors.blue.shade400
+                                      ],
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.arrow_upward,
+                                  color: Colors.white, size: 20),
+                              onPressed:
+                                  _isSending ? null : () => _sendMessage(),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBotAvatar(),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
+            ),
+            child: SizedBox(
+              width: 40,
+              height: 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildDot(0),
+                  _buildDot(1),
+                  _buildDot(2),
                 ],
               ),
             ),
@@ -271,60 +374,136 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+  Widget _buildDot(int index) {
+    return const CircleAvatar(radius: 3, backgroundColor: Colors.grey);
+  }
+
+  Widget _buildBotAvatar() {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.black, // Dark background for bot
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white10),
+      ),
+      child:
+          const Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 16),
+    );
+  }
 }
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
+  final String? userImage;
 
-  const ChatBubble({super.key, required this.message});
+  const ChatBubble({super.key, required this.message, this.userImage});
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
-    final displayText = isUser ? message.message : message.response;
-    final colorScheme = Theme.of(context).colorScheme;
+    // final colorScheme = Theme.of(context).colorScheme; // Removed unused variable
 
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: AppSpacing.paddingMd,
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        decoration: BoxDecoration(
-          color: isUser
-              ? colorScheme.primary
-              : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isUser ? 16 : 4),
-            bottomRight: Radius.circular(isUser ? 4 : 16),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              displayText,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color:
-                        isUser ? colorScheme.onPrimary : colorScheme.onSurface,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('HH:mm').format(message.timestamp),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: isUser
-                        ? colorScheme.onPrimary.withOpacity(0.7)
-                        : colorScheme.onSurfaceVariant,
-                    fontSize: 10,
-                  ),
-            ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isUser) ...[
+            _buildBotAvatar(),
+            const SizedBox(width: 8),
           ],
-        ),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: isUser
+                    ? LinearGradient(
+                        colors: [Colors.purple.shade600, Colors.blue.shade600],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isUser
+                    ? null
+                    : const Color(0xFF1E1E2C), // Dark grey for bot
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isUser ? 20 : 4),
+                  topRight: Radius.circular(isUser ? 4 : 20),
+                  bottomLeft: const Radius.circular(20),
+                  bottomRight: const Radius.circular(20),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isUser ? message.message : message.response,
+                    style: TextStyle(
+                      color:
+                          isUser ? Colors.white : Colors.white.withOpacity(0.9),
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('HH:mm').format(message.timestamp),
+                    style: TextStyle(
+                      color: isUser ? Colors.white54 : Colors.grey,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isUser) ...[
+            const SizedBox(width: 8),
+            _buildUserAvatar(context),
+          ],
+        ],
       ),
+    );
+  }
+
+  Widget _buildBotAvatar() {
+    return Container(
+      width: 32,
+      height: 32,
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E2C),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white10),
+      ),
+      child:
+          const Icon(Icons.auto_awesome, color: Colors.purpleAccent, size: 16),
+    );
+  }
+
+  Widget _buildUserAvatar(BuildContext context) {
+    if (userImage != null) {
+      return CircleAvatar(
+        radius: 16,
+        backgroundImage: FileImage(File(userImage!)),
+        backgroundColor: Colors.transparent,
+      );
+    }
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: Colors.purple.withOpacity(0.2),
+      child: const Icon(Icons.person, size: 16, color: Colors.purple),
     );
   }
 }

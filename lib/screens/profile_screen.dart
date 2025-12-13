@@ -4,6 +4,7 @@ import 'package:airsense_5g/models/health_profile_model.dart';
 import 'package:airsense_5g/services/auth_service.dart';
 import 'package:airsense_5g/services/health_profile_service.dart';
 import 'package:airsense_5g/screens/login_screen.dart';
+import 'package:airsense_5g/screens/health_profile_form_screen.dart'; // Import form screen
 import 'package:airsense_5g/theme.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -158,16 +159,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _navigateToEditProfile() async {
+    if (_user == null) return;
+
+    // Navigate to HealthProfileFormScreen, passing existing profile if any
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HealthProfileFormScreen(
+          userId: _user!.id,
+          existingProfile: _profile,
+        ),
+      ),
+    );
+    // Reload data when returning
+    _loadData();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Determine screen width for responsiveness if needed
+    // final screenSize = MediaQuery.of(context).size;
+
     return Scaffold(
       appBar: AppBar(
-          title: Text('Profile',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          centerTitle: true),
+        title: Text(
+          'Profile',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontFamily: 'Caveat',
+              fontSize: 28), // Using Caveat if available or fallback
+          // Note: If Caveat is not loaded, ensure it is added to pubspec or use 'Cursive' fallback
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              // Settings action
+            },
+          ),
+        ],
+      ),
       body: _isLoading
           ? Center(
               child: CircularProgressIndicator(
@@ -175,194 +206,224 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : SingleChildScrollView(
               padding: AppSpacing.paddingLg,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  GestureDetector(
-                    onTap: () => _showImageSourceActionSheet(context),
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                        image: _profileImagePath != null
-                            ? DecorationImage(
-                                image: FileImage(File(_profileImagePath!)),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
-                      child: _profileImagePath == null
-                          ? Icon(Icons.person,
-                              size: 60,
-                              color: Theme.of(context).colorScheme.primary)
-                          : null,
+                  // Profile Card
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 32, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(
+                          0xFF1E1E2C), // Dark card background like mockup
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
                     ),
-                  ),
-                  if (_profileImagePath == null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text('Tap to change',
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showImageSourceActionSheet(context),
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.shade400,
+                                  shape: BoxShape.circle,
+                                  image: _profileImagePath != null
+                                      ? DecorationImage(
+                                          image: FileImage(
+                                              File(_profileImagePath!)),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: _profileImagePath == null
+                                    ? Center(
+                                        child: Text(
+                                          _user?.name.isNotEmpty == true
+                                              ? _user!.name[0].toUpperCase()
+                                              : 'A',
+                                          style: const TextStyle(
+                                            fontSize: 40,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w300,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF2E2E3E), // Darker circle
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.camera_alt_outlined,
+                                      size: 16, color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _user?.name ?? 'User',
                           style: Theme.of(context)
                               .textTheme
-                              .bodySmall
+                              .headlineSmall
                               ?.copyWith(
-                                  color:
-                                      Theme.of(context).colorScheme.primary)),
-                    ),
-                  const SizedBox(height: 16),
-                  Text(_user?.name ?? 'User',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(_user?.email ?? '',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 32),
-                  if (_profile != null) ...[
-                    Text('Health Profile',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    ProfileInfoCard(
-                        label: 'Age', value: _profile!.age.toString()),
-                    ProfileInfoCard(label: 'Gender', value: _profile!.gender),
-                    ProfileInfoCard(
-                        label: 'Activity Level',
-                        value: _profile!.activityLevel),
-                    ProfileInfoCard(
-                        label: 'Pollution Sensitivity',
-                        value: _profile!.pollutionSensitivity),
-                    if (_profile!.conditions.isNotEmpty)
-                      ProfileInfoCard(
-                          label: 'Health Conditions',
-                          value: _profile!.conditions.join(', ')),
-                    const SizedBox(height: 24),
-                  ],
-                  Text('App Settings',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  SettingsCard(
-                      icon: Icons.notifications,
-                      label: 'Notifications',
-                      onTap: () {}),
-                  SettingsCard(
-                      icon: Icons.location_on,
-                      label: 'Location Settings',
-                      onTap: () {}),
-                  SettingsCard(
-                      icon: Icons.security,
-                      label: 'Privacy & Security',
-                      onTap: () {}),
-                  SettingsCard(
-                      icon: Icons.help, label: 'Help & Support', onTap: () {}),
-                  SettingsCard(
-                      icon: Icons.info,
-                      label: 'About AirSense 5G',
-                      onTap: () {}),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _logout,
-                    style: ElevatedButton.styleFrom(
-                      padding: AppSpacing.verticalMd,
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                      foregroundColor: Theme.of(context).colorScheme.onError,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md)),
-                      elevation: 0,
-                      minimumSize: const Size(double.infinity, 50),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.logout,
-                            color: Theme.of(context).colorScheme.onError),
-                        const SizedBox(width: 8),
-                        Text('Logout',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.onError)),
+                                color: Colors.white,
+                                fontWeight: FontWeight.w300,
+                                fontFamily:
+                                    'Caveat', // Trying to match the font style if possible
+                                fontSize: 28,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _user?.email ?? '',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white54,
+                                  ),
+                        ),
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 24),
+
+                  // Health Profile Section
+                  Text(
+                    'Health Profile',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w400,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E2C),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildProfileRow(
+                          context,
+                          icon: Icons.cake,
+                          label: 'Age',
+                          value: _profile != null
+                              ? '${_profile!.age} years'
+                              : '--',
+                          iconColor: Colors.purple.shade300,
+                        ),
+                        const Divider(
+                            height: 1,
+                            color: Colors.white10,
+                            indent: 16,
+                            endIndent: 16),
+                        _buildProfileRow(
+                          context,
+                          icon: Icons.wc, // Gender icon
+                          label: 'Gender',
+                          value: _profile?.gender ?? '--',
+                          iconColor: Colors.purple.shade300,
+                        ),
+                        const Divider(
+                            height: 1,
+                            color: Colors.white10,
+                            indent: 16,
+                            endIndent: 16),
+                        _buildProfileRow(
+                          context,
+                          icon: Icons.favorite,
+                          label: 'Activity Level',
+                          value: _profile?.activityLevel ?? '--',
+                          iconColor: Colors.purple.shade300,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Edit Health Profile Button
+                  ElevatedButton.icon(
+                    onPressed: _navigateToEditProfile,
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Edit Health Profile'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFF8B5CF6), // Example Custom Purple
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Logout Button
+                  OutlinedButton.icon(
+                    onPressed: _logout,
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Logout'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade400, // Text color
+                      side: BorderSide(color: Colors.white10), // Border color
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      backgroundColor: const Color(0xFF1E1E2C), // Dark bg
+                    ),
+                  ),
                 ],
               ),
             ),
     );
   }
-}
 
-class ProfileInfoCard extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const ProfileInfoCard({super.key, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: AppSpacing.paddingMd,
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppRadius.md)),
+  Widget _buildProfileRow(BuildContext context,
+      {required IconData icon,
+      required String label,
+      required String value,
+      required Color iconColor}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          Flexible(
-              child: Text(value,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.end,
-                  overflow: TextOverflow.ellipsis)),
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class SettingsCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const SettingsCard(
-      {super.key,
-      required this.icon,
-      required this.label,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(AppRadius.md)),
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-        title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        trailing: Icon(Icons.chevron_right,
-            color: Theme.of(context).colorScheme.onSurfaceVariant),
-        onTap: onTap,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md)),
       ),
     );
   }
