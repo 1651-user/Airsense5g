@@ -62,53 +62,61 @@ class BytezService {
 
           // 2. Handle String (or converted String)
           if (output is String) {
-            var trimmed = output.trim();
+            String processed = output.trim();
 
-            // Recursively strip the {role: assistant, content: ...} wrapper
-            // The model seems to output nested structures or hallucinations of this format
-            // containing nested braces like {role: ... offset by {role: ...
-            // We loop to peel off every layer.
-            int safetyLoop = 0;
-            while (trimmed.startsWith('{') &&
-                trimmed.contains('role: assistant') &&
-                safetyLoop < 5) {
-              final contentIndex = trimmed.indexOf('content:');
-              if (contentIndex != -1) {
-                // Extract everything after 'content:'
-                // We add 8 for 'content:'.length
-                var extracted = trimmed.substring(contentIndex + 8).trim();
+            // Loop up to 10 times to peel off layers of {role: ..., content: ...}
+            // using strictly index-based string manipulation for reliability.
+            int loops = 0;
+            while (loops < 10) {
+              bool changed = false;
 
-                // Remove the trailing '}' if it matches the opening '{' for this wrapper
-                if (extracted.endsWith('}')) {
-                  extracted =
-                      extracted.substring(0, extracted.length - 1).trim();
+              // Check for the known wrapper format: starts with { and contains role: assistant
+              // We check substring(0, 50) to avoid false positives deep in the text if possible,
+              // but purely contains matches usage seen.
+              if (processed.startsWith('{') &&
+                  processed.contains('role: assistant')) {
+                // Try to find "content:"
+                int contentIndex = processed.indexOf('content:');
+                if (contentIndex != -1) {
+                  // Extract content after "content:" (8 chars)
+                  String candidate =
+                      processed.substring(contentIndex + 8).trim();
+
+                  // If the candidate ends with '}', and we started with '{',
+                  // it's highly likely this } closes the outer {.
+                  if (candidate.endsWith('}')) {
+                    candidate =
+                        candidate.substring(0, candidate.length - 1).trim();
+                  }
+
+                  processed = candidate;
+                  changed = true;
                 }
-                trimmed = extracted;
-              } else {
-                // If we see the wrapper start but no content field, break to avoid infinite loop
-                break;
               }
-              safetyLoop++;
+
+              // Also strip surrounding quotes if they exist (residual from JSON)
+              if (processed.startsWith('"') &&
+                  processed.endsWith('"') &&
+                  processed.length > 1) {
+                processed = processed.substring(1, processed.length - 1);
+                changed = true;
+              } else if (processed.startsWith("'") &&
+                  processed.endsWith("'") &&
+                  processed.length > 1) {
+                processed = processed.substring(1, processed.length - 1);
+                changed = true;
+              }
+
+              if (!changed) break;
+              loops++;
             }
 
-            // Aggressive Regex fallback if plain stripping didn't clean it (e.g. JSON style quotes)
-            final jsonMatch =
-                RegExp(r'"content":\s*"(.*?)"').firstMatch(trimmed);
-            if (jsonMatch != null) {
-              return jsonMatch.group(1) ?? trimmed;
+            // Final fallback: if "content:" still remains at the very start (e.g. malformed wrapper), try to strip it
+            if (processed.startsWith('content:')) {
+              processed = processed.substring(8).trim();
             }
 
-            // Fallback for Python-style dicts if they happen to use quotes
-            final simpleMatch =
-                RegExp(r"content:\s*['\u0022]?(.*?)['\u0022]?(?:,|})")
-                    .firstMatch(trimmed);
-            if (simpleMatch != null) {
-              return simpleMatch.group(1)?.trim() ?? trimmed;
-            }
-
-            // If it looks like code/JSON but regex failed, allow it to pass through
-            // rather than saying "I don't show", so we can at least see it.
-            return trimmed;
+            return processed;
           }
 
           return output?.toString() ?? "Received empty response.";
