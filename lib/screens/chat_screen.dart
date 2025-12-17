@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:airsense_5g/models/chat_message_model.dart';
 import 'package:airsense_5g/services/auth_service.dart';
 import 'package:airsense_5g/services/bytez_service.dart';
+import 'package:airsense_5g/services/prediction_service.dart';
 
 import 'package:intl/intl.dart';
 import 'dart:io';
@@ -55,7 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
       userId: 'system',
       message: '',
       response:
-          'Hello! I\'m your AirSense AI assistant. How can I assist you today?',
+          'Hello! I\'m your AirSense AI assistant powered by local LLaMA. I can help you with air quality information and answer your questions. How can I assist you today?',
       timestamp: DateTime.now(),
       isUser: false,
     ));

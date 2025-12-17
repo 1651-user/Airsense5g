@@ -1,132 +1,141 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 class BytezService {
   final Dio _dio = Dio();
-  final String _apiKey = '55d1337983ed4e97d81f98fe807c9cb5';
-  final String _modelId = 'Qwen/Qwen3-4B-Instruct-2507';
-  final String _baseUrl = 'https://api.bytez.com/models/v2';
 
-  Future<String> sendMessage(List<Map<String, String>> messages) async {
+  // Backend server URL - change this to your computer's IP if testing on physical device
+  // For emulator: http://10.0.2.2:5000 (Android) or http://localhost:5000 (iOS)
+  // For physical device: http://YOUR_COMPUTER_IP:5000
+  final String _baseUrl = kIsWeb
+      ? 'http://localhost:5000/api'
+      : 'http://10.0.2.2:5000/api'; // Android emulator default
+
+  /// Send a message to the local LLaMA model via backend server
+  ///
+  /// [messages] - List of chat messages in OpenAI format
+  /// [includeContext] - Whether to include air quality context (default: true)
+  Future<String> sendMessage(
+    List<Map<String, String>> messages, {
+    bool includeContext = true,
+  }) async {
     try {
-      final url = '$_baseUrl/$_modelId';
+      final url = '$_baseUrl/chat';
+
+      debugPrint('Sending message to LLaMA via backend: $url');
+      debugPrint('Message count: ${messages.length}');
 
       final response = await _dio.post(
         url,
         options: Options(
           headers: {
-            'Authorization': 'Key $_apiKey',
             'Content-Type': 'application/json',
           },
+          receiveTimeout: const Duration(seconds: 60), // LLaMA can be slow
+          sendTimeout: const Duration(seconds: 10),
         ),
         data: {
-          'input': messages,
-          'params': {
-            'max_new_tokens': 1024,
-            'temperature': 0.7,
-          }
+          'messages': messages,
+          'include_context': includeContext,
         },
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
-        if (data is Map && data.containsKey('output')) {
-          var output = data['output'];
 
-          // Helper to extract content from a dynamic object
-          String? extractContent(dynamic item) {
-            if (item is Map) {
-              return item['content']?.toString() ??
-                  item['response']?.toString();
-            }
-            return null;
-          }
-
-          // 1. Handle List
-          if (output is List && output.isNotEmpty) {
-            // Try to find the last meaningful message
-            var lastItem = output.last;
-            // Try to extract from Map directly
-            var content = extractContent(lastItem);
-            if (content != null) return content;
-
-            // If not a map, treats as string
-            if (lastItem is String) {
-              output = lastItem;
-            } else {
-              // convert to string and try to parse
-              output = lastItem.toString();
-            }
-          }
-
-          // 2. Handle String (or converted String)
-          if (output is String) {
-            String processed = output.trim();
-
-            // Loop up to 10 times to peel off layers of {role: ..., content: ...}
-            // using strictly index-based string manipulation for reliability.
-            int loops = 0;
-            while (loops < 10) {
-              bool changed = false;
-
-              // Check for the known wrapper format: starts with { and contains role: assistant
-              // We check substring(0, 50) to avoid false positives deep in the text if possible,
-              // but purely contains matches usage seen.
-              if (processed.startsWith('{') &&
-                  processed.contains('role: assistant')) {
-                // Try to find "content:"
-                int contentIndex = processed.indexOf('content:');
-                if (contentIndex != -1) {
-                  // Extract content after "content:" (8 chars)
-                  String candidate =
-                      processed.substring(contentIndex + 8).trim();
-
-                  // If the candidate ends with '}', and we started with '{',
-                  // it's highly likely this } closes the outer {.
-                  if (candidate.endsWith('}')) {
-                    candidate =
-                        candidate.substring(0, candidate.length - 1).trim();
-                  }
-
-                  processed = candidate;
-                  changed = true;
-                }
-              }
-
-              // Also strip surrounding quotes if they exist (residual from JSON)
-              if (processed.startsWith('"') &&
-                  processed.endsWith('"') &&
-                  processed.length > 1) {
-                processed = processed.substring(1, processed.length - 1);
-                changed = true;
-              } else if (processed.startsWith("'") &&
-                  processed.endsWith("'") &&
-                  processed.length > 1) {
-                processed = processed.substring(1, processed.length - 1);
-                changed = true;
-              }
-
-              if (!changed) break;
-              loops++;
-            }
-
-            // Final fallback: if "content:" still remains at the very start (e.g. malformed wrapper), try to strip it
-            if (processed.startsWith('content:')) {
-              processed = processed.substring(8).trim();
-            }
-
-            return processed;
-          }
-
-          return output?.toString() ?? "Received empty response.";
+        if (data is Map && data['status'] == 'success') {
+          final responseText =
+              data['response']?.toString() ?? "No response content.";
+          debugPrint(
+              'LLaMA response received: ${responseText.substring(0, responseText.length > 50 ? 50 : responseText.length)}...');
+          return responseText;
         }
+
+        // Handle error responses from backend
+        if (data is Map && data['error'] != null) {
+          final errorMsg = data['error'].toString();
+          final details = data['message'] ?? data['details'] ?? '';
+          debugPrint('Backend error: $errorMsg - $details');
+
+          if (errorMsg.contains('Cannot connect to LM Studio')) {
+            return "⚠️ Cannot connect to LLaMA model. Please ensure LM Studio is running.\n\nDetails: $details";
+          } else if (errorMsg.contains('timed out')) {
+            return "⏱️ The AI model is taking too long to respond. Please try again with a shorter message.";
+          }
+
+          return "Sorry, there was an error: $errorMsg";
+        }
+
+        return "Received unexpected response format from server.";
+      }
+
+      // Handle HTTP errors
+      if (response.statusCode == 503) {
+        return "⚠️ LM Studio is not running or not accessible. Please start LM Studio and load a model.";
+      } else if (response.statusCode == 504) {
+        return "⏱️ Request timed out. The AI model took too long to respond.";
       }
 
       return "Sorry, I couldn't get a response from the server. (Status: ${response.statusCode})";
+    } on DioException catch (e) {
+      debugPrint('Dio Error: ${e.type} - ${e.message}');
+
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        return "⏱️ Connection timed out. Please check if the backend server is running.";
+      } else if (e.type == DioExceptionType.connectionError) {
+        return "⚠️ Cannot connect to backend server. Please ensure:\n"
+            "1. Backend server is running (python backend/server.py)\n"
+            "2. LM Studio is running with a model loaded\n"
+            "3. Network connectivity is available";
+      }
+
+      return "Error: Unable to connect to AI service. (${e.type})";
     } catch (e) {
-      debugPrint('Bytez API Error: $e');
-      return "Error: Unable to connect to AI service. ($e)";
+      debugPrint('Unexpected error: $e');
+      return "Error: An unexpected error occurred. ($e)";
+    }
+  }
+
+  /// Test connection to backend server
+  Future<bool> testConnection() async {
+    try {
+      final url = _baseUrl.replaceAll('/api', '/health');
+      final response = await _dio.get(
+        url,
+        options: Options(
+          receiveTimeout: const Duration(seconds: 5),
+        ),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Backend connection test failed: $e');
+      return false;
+    }
+  }
+
+  /// Test LLaMA model connection via backend
+  Future<Map<String, dynamic>> testLLaMA() async {
+    try {
+      final url = '$_baseUrl/test-llm';
+      final response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        return {
+          'connected': true,
+          'data': response.data,
+        };
+      }
+
+      return {
+        'connected': false,
+        'error': 'Status ${response.statusCode}',
+      };
+    } catch (e) {
+      return {
+        'connected': false,
+        'error': e.toString(),
+      };
     }
   }
 }
