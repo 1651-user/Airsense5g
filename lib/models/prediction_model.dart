@@ -5,6 +5,10 @@ class PredictionData {
   final double pm10;
   final double co2;
   final double no2;
+  final double? tvoc;
+  final double? temperature;
+  final double? humidity;
+  final double? pressure;
   final Location? location;
   final List<ForecastData>? forecast;
 
@@ -15,6 +19,10 @@ class PredictionData {
     required this.pm10,
     required this.co2,
     required this.no2,
+    this.tvoc,
+    this.temperature,
+    this.humidity,
+    this.pressure,
     this.location,
     this.forecast,
   });
@@ -29,6 +37,16 @@ class PredictionData {
       pm10: (json['pm10'] ?? 0).toDouble(),
       co2: (json['co2'] ?? 0).toDouble(),
       no2: (json['no2'] ?? 0).toDouble(),
+      tvoc: json['tvoc'] != null ? (json['tvoc'] as num).toDouble() : null,
+      temperature: json['temperature'] != null
+          ? (json['temperature'] as num).toDouble()
+          : null,
+      humidity: json['humidity'] != null
+          ? (json['humidity'] as num).toDouble()
+          : null,
+      pressure: json['pressure'] != null
+          ? (json['pressure'] as num).toDouble()
+          : null,
       location:
           json['location'] != null ? Location.fromJson(json['location']) : null,
       forecast: json['forecast'] != null
@@ -47,6 +65,10 @@ class PredictionData {
       'pm10': pm10,
       'co2': co2,
       'no2': no2,
+      'tvoc': tvoc,
+      'temperature': temperature,
+      'humidity': humidity,
+      'pressure': pressure,
       'location': location?.toJson(),
       'forecast': forecast?.map((f) => f.toJson()).toList(),
     };

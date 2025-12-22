@@ -11,7 +11,7 @@ class BytezService {
       ? 'http://localhost:5000/api'
       : 'http://10.0.2.2:5000/api'; // Android emulator default
 
-  /// Send a message to the local LLaMA model via backend server
+  /// Send a message to the Phi-2 model via backend server
   ///
   /// [messages] - List of chat messages in OpenAI format
   /// [includeContext] - Whether to include air quality context (default: true)
@@ -22,7 +22,7 @@ class BytezService {
     try {
       final url = '$_baseUrl/chat';
 
-      debugPrint('Sending message to LLaMA via backend: $url');
+      debugPrint('Sending message to Phi-2 via backend: $url');
       debugPrint('Message count: ${messages.length}');
 
       final response = await _dio.post(
@@ -31,7 +31,7 @@ class BytezService {
           headers: {
             'Content-Type': 'application/json',
           },
-          receiveTimeout: const Duration(seconds: 60), // LLaMA can be slow
+          receiveTimeout: const Duration(seconds: 60), // Phi-2 can be slow
           sendTimeout: const Duration(seconds: 10),
         ),
         data: {
@@ -47,7 +47,7 @@ class BytezService {
           final responseText =
               data['response']?.toString() ?? "No response content.";
           debugPrint(
-              'LLaMA response received: ${responseText.substring(0, responseText.length > 50 ? 50 : responseText.length)}...');
+              'Phi-2 response received: ${responseText.substring(0, responseText.length > 50 ? 50 : responseText.length)}...');
           return responseText;
         }
 
@@ -58,7 +58,7 @@ class BytezService {
           debugPrint('Backend error: $errorMsg - $details');
 
           if (errorMsg.contains('Cannot connect to LM Studio')) {
-            return "⚠️ Cannot connect to LLaMA model. Please ensure LM Studio is running.\n\nDetails: $details";
+            return "⚠️ Cannot connect to Phi-2 model. Please ensure LM Studio is running.\n\nDetails: $details";
           } else if (errorMsg.contains('timed out')) {
             return "⏱️ The AI model is taking too long to respond. Please try again with a shorter message.";
           }
@@ -114,8 +114,8 @@ class BytezService {
     }
   }
 
-  /// Test LLaMA model connection via backend
-  Future<Map<String, dynamic>> testLLaMA() async {
+  /// Test Phi-2 model connection via backend
+  Future<Map<String, dynamic>> testPhi2() async {
     try {
       final url = '$_baseUrl/test-llm';
       final response = await _dio.get(url);

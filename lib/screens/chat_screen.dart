@@ -56,7 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
       userId: 'system',
       message: '',
       response:
-          'Hello! I\'m your AirSense AI assistant powered by local LLaMA. I can help you with air quality information and answer your questions. How can I assist you today?',
+          'Hello! I\'m your AirSense AI assistant powered by Phi-2. I can help you with air quality information and answer your questions. How can I assist you today?',
       timestamp: DateTime.now(),
       isUser: false,
     ));

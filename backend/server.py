@@ -121,17 +121,60 @@ def chat():
             return jsonify({'error': 'No messages provided'}), 400
         
         messages = data['messages']
-        include_context = data.get('include_context', True)
+        include_context = data.get('include_context', True)  # Enabled by default for air quality context
         
         # Add air quality context if requested and available
         if include_context and latest_prediction['data'] is not None:
-            aqi = latest_prediction['data'].get('aqi', 'N/A')
-            pm25 = latest_prediction['data'].get('pm25', 'N/A')
+            pred_data = latest_prediction['data']
+            
+            # Build comprehensive context message
+            context_parts = ["You are an air quality assistant."]
+            
+            # Add AQI if available
+            if 'aqi' in pred_data:
+                aqi = pred_data['aqi']
+                context_parts.append(f"Current AQI: {aqi}")
+            
+            # Add predictions if available
+            if 'predictions' in pred_data:
+                predictions = pred_data['predictions']
+                pred_summary = []
+                
+                for target, values in predictions.items():
+                    if isinstance(values, dict) and 'predicted' in values:
+                        pred_val = values['predicted']
+                        unit = values.get('unit', '')
+                        pred_summary.append(f"{target}: {pred_val}{unit}")
+                
+                if pred_summary:
+                    context_parts.append("Predictions: " + ", ".join(pred_summary))
+            else:
+                # Fallback to basic pollutant data
+                pollutants = []
+                if 'pm25' in pred_data:
+                    pollutants.append(f"PM2.5: {pred_data['pm25']} µg/m³")
+                if 'pm10' in pred_data:
+                    pollutants.append(f"PM10: {pred_data['pm10']} µg/m³")
+                if 'co2' in pred_data:
+                    pollutants.append(f"CO2: {pred_data['co2']} ppm")
+                if 'tvoc' in pred_data:
+                    pollutants.append(f"TVOC: {pred_data['tvoc']} ppb")
+                if 'temperature' in pred_data:
+                    pollutants.append(f"Temp: {pred_data['temperature']}°C")
+                if 'humidity' in pred_data:
+                    pollutants.append(f"Humidity: {pred_data['humidity']}%")
+                
+                if pollutants:
+                    context_parts.append(" | ".join(pollutants))
+            
+            context_parts.append("When asked about air quality, provide all available metrics including AQI, PM2.5, PM10, temperature, and humidity.")
+            
             context_message = {
                 'role': 'system',
-                'content': f"You are an air quality assistant. Current AQI: {aqi}, PM2.5: {pm25} µg/m³. Keep responses brief and helpful."
+                'content': " ".join(context_parts)
             }
             messages.insert(0, context_message)
+
         
         # Forward request to LM Studio
         lm_studio_url = f"{LM_STUDIO_BASE_URL}/chat/completions"
@@ -139,8 +182,8 @@ def chat():
         payload = {
             'model': LM_STUDIO_MODEL,
             'messages': messages,
-            'temperature': 0.9,  # Higher temperature for faster generation
-            'max_tokens': 150  # Reduced from 500 to 150 for faster responses
+            'temperature': 0.9,
+            'max_tokens': 300  # Increased for complete, detailed responses
         }
         
         logger.info(f"Forwarding chat request to LM Studio: {lm_studio_url}")
@@ -149,7 +192,7 @@ def chat():
             response = requests.post(
                 lm_studio_url,
                 json=payload,
-                timeout=120  # Increased timeout to 120 seconds for slower models
+                timeout=180  # Increased to 3 minutes for slow models
             )
             
             if response.status_code == 200:
