@@ -127,51 +127,41 @@ def chat():
         if include_context and latest_prediction['data'] is not None:
             pred_data = latest_prediction['data']
             
-            # Build comprehensive context message
-            context_parts = ["You are an air quality assistant."]
+            # Ultra-compact context with ALL data
+            parts = []
             
-            # Add AQI if available
+            # AQI
             if 'aqi' in pred_data:
-                aqi = pred_data['aqi']
-                context_parts.append(f"Current AQI: {aqi}")
+                parts.append(f"AQI={pred_data['aqi']}")
             
-            # Add predictions if available
-            if 'predictions' in pred_data:
-                predictions = pred_data['predictions']
-                pred_summary = []
-                
-                for target, values in predictions.items():
-                    if isinstance(values, dict) and 'predicted' in values:
-                        pred_val = values['predicted']
-                        unit = values.get('unit', '')
-                        pred_summary.append(f"{target}: {pred_val}{unit}")
-                
-                if pred_summary:
-                    context_parts.append("Predictions: " + ", ".join(pred_summary))
-            else:
-                # Fallback to basic pollutant data
-                pollutants = []
-                if 'pm25' in pred_data:
-                    pollutants.append(f"PM2.5: {pred_data['pm25']} µg/m³")
-                if 'pm10' in pred_data:
-                    pollutants.append(f"PM10: {pred_data['pm10']} µg/m³")
-                if 'co2' in pred_data:
-                    pollutants.append(f"CO2: {pred_data['co2']} ppm")
-                if 'tvoc' in pred_data:
-                    pollutants.append(f"TVOC: {pred_data['tvoc']} ppb")
-                if 'temperature' in pred_data:
-                    pollutants.append(f"Temp: {pred_data['temperature']}°C")
-                if 'humidity' in pred_data:
-                    pollutants.append(f"Humidity: {pred_data['humidity']}%")
-                
-                if pollutants:
-                    context_parts.append(" | ".join(pollutants))
+            # All current readings (compact)
+            if 'sensor_data' in pred_data and pred_data['sensor_data']:
+                sd = pred_data['sensor_data']
+                curr = []
+                if 'pm2_5' in sd: curr.append(f"PM2.5={sd['pm2_5']}")
+                if 'pm10' in sd: curr.append(f"PM10={sd['pm10']}")
+                if 'co2' in sd: curr.append(f"CO2={sd['co2']}")
+                if 'tvoc' in sd: curr.append(f"TVOC={sd['tvoc']}")
+                if 'temperature' in sd: curr.append(f"T={sd['temperature']}")
+                if 'humidity' in sd: curr.append(f"H={sd['humidity']}")
+                if curr:
+                    parts.append(",".join(curr))
             
-            context_parts.append("When asked about air quality, provide all available metrics including AQI, PM2.5, PM10, temperature, and humidity.")
+            # All predictions (compact)
+            if 'predictions' in pred_data and pred_data['predictions']:
+                preds = pred_data['predictions']
+                p = []
+                for name in ['PM2.5', 'PM10', 'CO2', 'TVOC']:
+                    if name in preds and 'predicted' in preds[name]:
+                        p.append(f"{name}→{preds[name]['predicted']}")
+                if p:
+                    parts.append(",".join(p))
+            
+            context = ", ".join(parts) + ". Answer concisely."
             
             context_message = {
                 'role': 'system',
-                'content': " ".join(context_parts)
+                'content': context
             }
             messages.insert(0, context_message)
 
@@ -182,8 +172,8 @@ def chat():
         payload = {
             'model': LM_STUDIO_MODEL,
             'messages': messages,
-            'temperature': 0.9,
-            'max_tokens': 300  # Increased for complete, detailed responses
+            'temperature': 0.7,
+            'max_tokens': 250  # Complete but concise
         }
         
         logger.info(f"Forwarding chat request to LM Studio: {lm_studio_url}")

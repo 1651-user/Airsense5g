@@ -251,7 +251,11 @@ def send_to_backend(predictions, sensor_data):
         )
         
         if response.status_code == 200:
-            print(f"  OK Sent to backend (AQI: {aqi})")
+            print(f"  ✓ Sent to backend (AQI: {aqi})")
+            print(f"  ✓ AI chat now has access to:")
+            print(f"    - Current sensor readings")
+            print(f"    - {len(predictions)} predicted values")
+            print(f"    - AQI and air quality data")
             return True
         else:
             print(f"  ERROR Backend returned {response.status_code}")

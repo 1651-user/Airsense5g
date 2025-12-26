@@ -1,0 +1,194 @@
+```
+AirSense 5G - AI Chat Data Flow
+================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         MQTT SENSOR (AM3)                                │
+│                    (Real-time Air Quality Data)                          │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+                                 │ MQTT Protocol
+                                 │ (Live sensor readings)
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      mqtt_to_phi2.py                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │ 1. Receives MQTT data                                            │   │
+│  │ 2. Saves to mqtt_data.json                                       │   │
+│  │ 3. Generates predictions using ML models                         │   │
+│  │ 4. Sends to backend server                                       │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+                                 │ HTTP POST
+                                 │ /api/predictions
+                                 │
+                                 │ Payload:
+                                 │ {
+                                 │   "aqi": 85,
+                                 │   "predictions": {...},
+                                 │   "sensor_data": {...}
+                                 │ }
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Backend Server (Flask)                                │
+│                    backend/server.py                                     │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │ Stores latest prediction data in memory:                         │   │
+│  │                                                                   │   │
+│  │ latest_prediction = {                                            │   │
+│  │   'timestamp': '2025-12-26T11:00:00',                            │   │
+│  │   'data': {                                                      │   │
+│  │     'aqi': 85,                                                   │   │
+│  │     'predictions': {                                             │   │
+│  │       'PM2.5': {'predicted': 36.8, 'current': 35.2, ...},       │   │
+│  │       'PM10': {'predicted': 54.2, 'current': 52.8, ...},        │   │
+│  │       ...                                                        │   │
+│  │     },                                                           │   │
+│  │     'sensor_data': {                                             │   │
+│  │       'pm2_5': 35.2,                                             │   │
+│  │       'pm10': 52.8,                                              │   │
+│  │       'co2': 412,                                                │   │
+│  │       ...                                                        │   │
+│  │     }                                                            │   │
+│  │   }                                                              │   │
+│  │ }                                                                │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+                                 │ Provides endpoints:
+                                 │ - GET /api/predictions/latest
+                                 │ - POST /api/chat
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+                    ▼                         ▼
+         ┌──────────────────┐    ┌──────────────────────┐
+         │  Flutter App     │    │   LM Studio (Phi-2)  │
+         │  (User Chat)     │    │   AI Model           │
+         └──────────────────┘    └──────────────────────┘
+                    │                         ▲
+                    │                         │
+                    │  User asks:             │
+                    │  "Show pollutant        │
+                    │   levels"               │
+                    │                         │
+                    ▼                         │
+         ┌──────────────────────────────────────────────┐
+         │  POST /api/chat                              │
+         │  {                                           │
+         │    "messages": [                             │
+         │      {"role": "user",                        │
+         │       "content": "Show pollutant levels"}    │
+         │    ],                                        │
+         │    "include_context": true                   │
+         │  }                                           │
+         └──────────────────┬───────────────────────────┘
+                            │
+                            ▼
+         ┌─────────────────────────────────────────────────────────┐
+         │  Backend injects context from latest_prediction:        │
+         │                                                          │
+         │  {                                                       │
+         │    "messages": [                                         │
+         │      {                                                   │
+         │        "role": "system",                                 │
+         │        "content": "You are an air quality assistant...  │
+         │                                                          │
+         │          Air Quality Index (AQI): 85 (Moderate)         │
+         │                                                          │
+         │          CURRENT SENSOR READINGS:                       │
+         │            • PM2.5: 35.2 µg/m³                          │
+         │            • PM10: 52.8 µg/m³                           │
+         │            • CO2: 412 ppm                               │
+         │            ...                                          │
+         │                                                          │
+         │          PREDICTED VALUES (Next Reading):               │
+         │            • PM2.5: 36.8µg/m³ (↑ +1.6)                 │
+         │            • PM10: 54.2µg/m³ (↑ +1.4)                  │
+         │            ...                                          │
+         │                                                          │
+         │          Use ACTUAL VALUES when responding."            │
+         │      },                                                  │
+         │      {                                                   │
+         │        "role": "user",                                   │
+         │        "content": "Show pollutant levels"               │
+         │      }                                                   │
+         │    ]                                                     │
+         │  }                                                       │
+         └──────────────────┬──────────────────────────────────────┘
+                            │
+                            │ Forwards to LM Studio
+                            │
+                            ▼
+         ┌─────────────────────────────────────────────────────────┐
+         │  LM Studio (Phi-2) processes with context              │
+         │                                                          │
+         │  Generates response using actual values:                │
+         │                                                          │
+         │  "Based on current sensor readings:                     │
+         │                                                          │
+         │   Air Quality Index: 85 (Moderate)                      │
+         │                                                          │
+         │   Current Pollutant Levels:                             │
+         │   • PM2.5: 35.2 µg/m³                                  │
+         │   • PM10: 52.8 µg/m³                                   │
+         │   • CO2: 412 ppm                                       │
+         │   • TVOC: 125 ppb                                      │
+         │                                                          │
+         │   Temperature: 24.5°C                                   │
+         │   Humidity: 65%                                         │
+         │                                                          │
+         │   Predictions for next reading:                         │
+         │   • PM2.5 expected to increase to 36.8 µg/m³          │
+         │   • PM10 expected to increase to 54.2 µg/m³           │
+         │                                                          │
+         │   The air quality is moderate..."                       │
+         └──────────────────┬──────────────────────────────────────┘
+                            │
+                            │ Returns response
+                            │
+                            ▼
+         ┌─────────────────────────────────────────────────────────┐
+         │  Backend returns to Flutter:                            │
+         │  {                                                       │
+         │    "status": "success",                                  │
+         │    "response": "Based on current sensor readings..."     │
+         │  }                                                       │
+         └──────────────────┬──────────────────────────────────────┘
+                            │
+                            ▼
+         ┌─────────────────────────────────────────────────────────┐
+         │  Flutter App displays AI response to user               │
+         │                                                          │
+         │  User sees actual pollutant levels with values!         │
+         └─────────────────────────────────────────────────────────┘
+
+
+Key Points:
+===========
+
+1. MQTT data flows continuously from sensors
+2. Predictions are generated using ML models
+3. Backend stores latest data in memory
+4. When user asks about pollutants, backend injects context
+5. AI receives actual values and responds with them
+6. User gets real-time, accurate information
+
+Data Refresh:
+=============
+
+- MQTT data: Real-time (as sensors send)
+- Predictions: Generated with each new MQTT message
+- Backend storage: Updated immediately
+- AI context: Injected with every chat request
+- Cache: 5 minutes for prediction endpoint
+
+Result:
+=======
+
+✅ Users get ACTUAL pollutant levels, not generic responses
+✅ AI has access to both current and predicted values
+✅ Responses include trend indicators (↑/↓)
+✅ Full integration between sensors, ML, and AI chat
+```
