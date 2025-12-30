@@ -30,7 +30,7 @@ if sys.platform == 'win32':
 # Configuration
 EXCEL_FILE = 'output.xlsx'
 JSON_FILE = 'mqtt_data.json'
-BACKEND_URL = 'http://localhost:5000/api/predictions'
+BACKEND_URL = 'http://192.168.1.147:5000/api/predictions'
 CHECK_INTERVAL = 30  # seconds
 MODELS_DIR = 'models'
 
@@ -264,7 +264,7 @@ else:
 print("\n[4/5] Checking backend status...")
 
 try:
-    response = requests.get('http://localhost:5000/health', timeout=2)
+    response = requests.get('http://192.168.1.147:5000/health', timeout=2)
     if response.status_code == 200:
         print("  ✓ Backend is running")
     else:
@@ -295,22 +295,40 @@ try:
             
             # Update Excel
             print("  📊 Updating Excel...", end=" ")
-            try:
-                with open(JSON_FILE, 'r') as f:
-                    json_data = json.load(f)
-                
-                if json_data:
-                    new_df = pd.DataFrame(json_data)
-                    existing_df = pd.read_excel(EXCEL_FILE)
+            
+            max_retries = 3
+            retry_delay = 1  # seconds (shorter for live updates)
+            excel_updated = False
+            
+            for attempt in range(max_retries):
+                try:
+                    with open(JSON_FILE, 'r') as f:
+                        json_data = json.load(f)
                     
-                    # Quick append
-                    combined_df = pd.concat([existing_df, new_df], ignore_index=True)
-                    combined_df.to_excel(EXCEL_FILE, index=False)
-                    print("✓")
-                else:
-                    print("⚠️  No data")
-            except Exception as e:
-                print(f"✗ {e}")
+                    if json_data:
+                        new_df = pd.DataFrame(json_data)
+                        existing_df = pd.read_excel(EXCEL_FILE)
+                        
+                        # Quick append
+                        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+                        combined_df.to_excel(EXCEL_FILE, index=False)
+                        print("✓")
+                        excel_updated = True
+                        break  # Success, exit retry loop
+                    else:
+                        print("⚠️  No data")
+                        break
+                        
+                except PermissionError:
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)  # Wait before retry
+                    else:
+                        print(f"✗ [Errno 13] Permission denied: '{EXCEL_FILE}'")
+                        print(f"     💡 Close {EXCEL_FILE} in Excel to allow updates")
+                        
+                except Exception as e:
+                    print(f"✗ {e}")
+                    break
             
             # Generate new predictions
             print("  🤖 Generating predictions...", end=" ")

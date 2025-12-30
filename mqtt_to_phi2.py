@@ -42,15 +42,16 @@ MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
 
 
 # Backend Configuration
-BACKEND_URL = 'http://localhost:5000/api/predictions'
+BACKEND_URL = 'http://192.168.1.147:5000/api/predictions'
 
 # File paths
 JSON_FILE = 'mqtt_data.json'
+EXCEL_FILE = 'output3.xlsx'
 MODEL_DIR = 'models'
 
 # Global data storage
 sensor_data_buffer = []
-MAX_BUFFER_SIZE = 10  # Keep last 10 readings for prediction
+MAX_BUFFER_SIZE = 100  # Use last 100 readings for better predictions
 
 print("="*80)
 print("MQTT TO PHI-2 PIPELINE")
@@ -100,7 +101,8 @@ class PredictionEngine:
     
     def predict(self, sensor_data):
         """Generate predictions from sensor data"""
-        if not sensor_data or len(sensor_data) < 2:
+        # Need at least 3 historical values to predict
+        if not sensor_data or len(sensor_data) < 3:
             return None
         
         try:
@@ -111,7 +113,7 @@ class PredictionEngine:
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
             df_numeric = df[numeric_cols]
             
-            if len(df_numeric) < 2:
+            if len(df_numeric) < 3:
                 return None
             
             predictions = {}
@@ -128,12 +130,12 @@ class PredictionEngine:
                     if target_col is None:
                         continue
                     
-                    # Prepare features (all columns except target)
-                    feature_cols = [c for c in df_numeric.columns if c != target_col]
-                    if not feature_cols:
-                        continue
+                    # Get last 3 values of this specific pollutant
+                    # This matches how the model was trained (last 3 values -> next value)
+                    last_3_values = df_numeric[target_col].iloc[-3:].values
                     
-                    X = df_numeric[feature_cols].iloc[-1:].values
+                    # Reshape to (1, 3) for prediction
+                    X = last_3_values.reshape(1, -1)
                     
                     # Scale and predict
                     scaler = self.scalers[target]
@@ -313,8 +315,8 @@ def on_message(client, userdata, msg):
             if len(sensor_data_buffer) > MAX_BUFFER_SIZE:
                 sensor_data_buffer = sensor_data_buffer[-MAX_BUFFER_SIZE:]
             
-            # Generate predictions if we have enough data
-            if len(sensor_data_buffer) >= 2:
+            # Generate predictions if we have enough data (need 3 values)
+            if len(sensor_data_buffer) >= 3:
                 print(f"\n[PREDICTIONS] Generating predictions...")
                 predictions = prediction_engine.predict(sensor_data_buffer)
                 
@@ -333,7 +335,7 @@ def on_message(client, userdata, msg):
                 else:
                     print(f"  WARNING Could not generate predictions")
             else:
-                print(f"\n[INFO] Collecting data... ({len(sensor_data_buffer)}/{MAX_BUFFER_SIZE} samples)")
+                print(f"\n[INFO] Collecting data... ({len(sensor_data_buffer)}/{MAX_BUFFER_SIZE} samples, need 3 minimum)")
             
             print(f"\n{'='*80}\n")
             

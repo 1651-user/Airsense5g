@@ -20,7 +20,7 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
 EXCEL_FILE = 'output_excel.xlsx'
-BACKEND_URL = 'http://localhost:5000/api/predictions'
+BACKEND_URL = 'http://192.168.1.147:5000/api/predictions'
 
 print("⚡ Fast Excel to AI Update")
 print("-" * 60)

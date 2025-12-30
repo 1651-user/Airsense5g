@@ -5,12 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   late Dio _dio;
-  
+
   factory ApiClient() => _instance;
 
   ApiClient._internal() {
     _dio = Dio(BaseOptions(
-      baseUrl: 'https://api.airsense5g.com',
+      baseUrl: 'http://192.168.1.147:5000', // LOCAL BACKEND - Real sensor data
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {'Content-Type': 'application/json'},
@@ -27,11 +27,13 @@ class ApiClient {
         return handler.next(options);
       },
       onResponse: (response, handler) {
-        debugPrint('✅ API Response: ${response.statusCode} ${response.requestOptions.path}');
+        debugPrint(
+            '✅ API Response: ${response.statusCode} ${response.requestOptions.path}');
         return handler.next(response);
       },
       onError: (error, handler) {
-        debugPrint('❌ API Error: ${error.response?.statusCode} ${error.requestOptions.path}');
+        debugPrint(
+            '❌ API Error: ${error.response?.statusCode} ${error.requestOptions.path}');
         debugPrint('Error message: ${error.message}');
         return handler.next(error);
       },
@@ -40,7 +42,8 @@ class ApiClient {
 
   Dio get dio => _dio;
 
-  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
+  Future<Response> get(String path,
+      {Map<String, dynamic>? queryParameters}) async {
     try {
       return await _dio.get(path, queryParameters: queryParameters);
     } catch (e) {

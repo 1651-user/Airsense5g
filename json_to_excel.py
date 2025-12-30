@@ -12,6 +12,7 @@ import sys
 import pandas as pd
 import json
 import os
+import time
 from datetime import datetime
 
 # Fix Windows console encoding
@@ -31,7 +32,7 @@ try:
     with open(JSON_FILE, 'r') as f:
         json_data = json.load(f)
     
-    print(f"   ✓ Loaded {len(json_data)} records")
+    print(f"   ✓ Loaded {len(json_data)} records")w
     
     if not json_data:
         print("   ⚠️  No data in JSON file")
@@ -68,11 +69,27 @@ try:
         print(f"   ℹ️  File doesn't exist, creating new one")
         combined_df = new_df
     
-    # Save to Excel
+    # Save to Excel with retry logic
     print(f"\n💾 Saving to {EXCEL_FILE}...")
-    combined_df.to_excel(EXCEL_FILE, index=False)
     
-    print(f"   ✓ Successfully saved!")
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            combined_df.to_excel(EXCEL_FILE, index=False)
+            print(f"   ✓ Successfully saved!")
+            break  # Success, exit retry loop
+            
+        except PermissionError:
+            if attempt < max_retries - 1:
+                print(f"   ⚠️  File is locked (probably open in Excel)")
+                print(f"   ⏳ Retrying in {retry_delay} seconds... (Attempt {attempt + 2}/{max_retries})")
+                time.sleep(retry_delay)
+            else:
+                print(f"   ❌ Failed after {max_retries} attempts")
+                print(f"\n⚠️  SOLUTION: Close {EXCEL_FILE} in Excel and try again")
+                raise  # Re-raise the error to be caught by outer exception handler
     
     # Summary
     print("\n" + "="*80)
@@ -102,6 +119,13 @@ try:
 except FileNotFoundError:
     print("\n❌ Error: mqtt_data.json not found!")
     print("   Make sure the MQTT pipeline has received at least one message.")
+
+except PermissionError as e:
+    print(f"\n❌ Permission Error: {e}")
+    print(f"\n💡 SOLUTION:")
+    print(f"   1. Close {EXCEL_FILE} in Excel")
+    print(f"   2. Close any other programs that might have the file open")
+    print(f"   3. Run this script again")
     
 except Exception as e:
     print(f"\n❌ Error: {e}")

@@ -1,0 +1,10 @@
+# LM Studio / Phi-2 Configuration
+LM_STUDIO_BASE_URL=http://localhost:1234/v1
+LM_STUDIO_MODEL=phi-2
+
+# Flask Server Configuration
+FLASK_HOST=0.0.0.0
+FLASK_PORT=5000
+
+# CORS Configuration (allow all origins for development)
+CORS_ORIGINS=*

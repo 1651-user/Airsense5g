@@ -24,7 +24,7 @@ if sys.platform == 'win32':
 
 EXCEL_FILE = 'output_excel.xlsx'
 JSON_FILE = 'mqtt_data.json'
-BACKEND_URL = 'http://localhost:5000/api/predictions'
+BACKEND_URL = 'http://192.168.1.147:5000/api/predictions'
 
 print("="*60)
 print("⚡ FAST UPDATE - All-in-One")

@@ -2,7 +2,7 @@ import requests
 import json
 
 # Test LM Studio chat endpoint
-url = "http://192.168.1.16:1234/v1/chat/completions"
+url = "http://192.168.0.103:1234/v1/chat/completions"
 
 payload = {
     "model": "llama-2-7b-chat",

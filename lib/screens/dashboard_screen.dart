@@ -88,6 +88,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         aqi: (_sensors.map((s) => s.currentData.aqi).reduce((a, b) => a + b) /
                 count)
             .round(),
+        temperature: _sensors
+                .map((s) => s.currentData.temperature)
+                .reduce((a, b) => a + b) /
+            count,
+        humidity: _sensors
+                .map((s) => s.currentData.humidity)
+                .reduce((a, b) => a + b) /
+            count,
+        pressure: _sensors
+                .map((s) => s.currentData.pressure)
+                .reduce((a, b) => a + b) /
+            count,
         timestamp: DateTime.now(),
       );
     }
@@ -372,7 +384,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Icon(Icons.bar_chart, color: colorScheme.primary, size: 20),
               const SizedBox(width: 8),
               Text(
-                'Pollutant Levels',
+                'Pollutant Levels by Sensor',
                 style: TextStyle(
                   color: colorScheme.onSurface,
                   fontSize: 16,
@@ -381,19 +393,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          _buildPollutantRow(
-              'PM2.5', data.pm25, 'avg', '15.0', 'µg/m³', Colors.red),
-          _buildPollutantRow(
-              'PM10', data.pm10, 'avg', '45.0', 'µg/m³', Colors.red),
-          _buildPollutantRow(
-              'O3', data.o3, 'avg', '100.0', 'ppb', Colors.green),
-          _buildPollutantRow(
-              'NO2', data.no2, 'avg', '40.0', 'ppb', Colors.green),
-          _buildPollutantRow(
-              'SO2', data.so2, 'avg', '40.0', 'ppb', Colors.green),
-          _buildPollutantRow('CO', 2.5, 'avg', '4.0', 'ppm', Colors.green),
+          const SizedBox(height: 20),
+          // Display all 5 sensors
+          ..._sensors.asMap().entries.map((entry) {
+            final index = entry.key;
+            final sensor = entry.value;
+            return _buildSensorSection(index + 1, sensor);
+          }),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSensorSection(int sensorNumber, Sensor sensor) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final data = sensor.currentData;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.3)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                '$sensorNumber',
+                style: TextStyle(
+                  color: colorScheme.primary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          title: Text(
+            'Sensor $sensorNumber',
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            'AQI: ${data.aqi} • ${SensorService().getAQICategory(data.aqi)}',
+            style: TextStyle(
+              color: _getAQIColor(data.aqi),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          children: [
+            const SizedBox(height: 8),
+            _buildPollutantRow(
+                'PM2.5', data.pm25, 'avg', '15.0', 'µg/m³', Colors.red),
+            _buildPollutantRow(
+                'PM10', data.pm10, 'avg', '45.0', 'µg/m³', Colors.red),
+            _buildPollutantRow(
+                'O3', data.o3, 'avg', '100.0', 'ppb', Colors.green),
+            _buildPollutantRow(
+                'NO2', data.no2, 'avg', '40.0', 'ppb', Colors.green),
+            _buildPollutantRow(
+                'SO2', data.so2, 'avg', '40.0', 'ppb', Colors.green),
+            _buildPollutantRow(
+                'CO2', data.co2, 'avg', '400.0', 'ppm', Colors.orange),
+          ],
+        ),
       ),
     );
   }

@@ -17,7 +17,7 @@ app = Flask(__name__)
 CORS(app, origins=os.getenv('CORS_ORIGINS', '*'))
 
 # Configuration
-LM_STUDIO_BASE_URL = os.getenv('LM_STUDIO_BASE_URL', 'http://localhost:1234/v1')
+LM_STUDIO_BASE_URL = os.getenv('LM_STUDIO_BASE_URL', 'http://192.168.0.103:1234/v1')
 LM_STUDIO_MODEL = os.getenv('LM_STUDIO_MODEL', 'local-model')
 
 # In-memory storage for latest prediction data
@@ -25,6 +25,12 @@ LM_STUDIO_MODEL = os.getenv('LM_STUDIO_MODEL', 'local-model')
 latest_prediction = {
     'timestamp': None,
     'data': None
+}
+
+# Storage for all sensor data (multi-sensor support)
+all_sensors_data = {
+    'timestamp': None,
+    'sensors': {}
 }
 
 # Health check endpoint
@@ -43,16 +49,23 @@ def receive_prediction():
     """
     Receive prediction data from the prediction model
     
-    Expected JSON format:
+    Expected JSON format (single sensor):
     {
         "timestamp": "2025-12-17T14:30:00",
         "aqi": 85,
         "pm25": 35.5,
-        "pm10": 50.2,
-        "co2": 400,
-        "no2": 20,
-        "location": {"lat": 12.9716, "lon": 77.5946},
-        "forecast": [...]
+        ...
+    }
+    
+    OR multi-sensor format:
+    {
+        "timestamp": "2025-12-28T12:00:00",
+        "total_sensors": 5,
+        "sensors": {
+            "sensor_1": {...},
+            "sensor_2": {...},
+            ...
+        }
     }
     """
     try:
@@ -61,17 +74,86 @@ def receive_prediction():
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        # Store the prediction data
-        latest_prediction['timestamp'] = datetime.now().isoformat()
-        latest_prediction['data'] = data
+        # Check if this is multi-sensor data
+        if 'sensors' in data and 'total_sensors' in data:
+            # Store multi-sensor data
+            all_sensors_data['timestamp'] = datetime.now().isoformat()
+            all_sensors_data['sensors'] = data['sensors']
+            all_sensors_data['total_sensors'] = data['total_sensors']
+            
+            logger.info(f"Received data from {data['total_sensors']} sensors")
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Data from {data["total_sensors"]} sensors received',
+                'timestamp': all_sensors_data['timestamp']
+            }), 200
+        else:
+            # Store single sensor prediction data
+            latest_prediction['timestamp'] = datetime.now().isoformat()
+            latest_prediction['data'] = data
+            
+            # Map into all_sensors_data for multi-sensor display
+            sensor_id = data.get('sensor_id')
+            if sensor_id:
+                sensor_key = f"sensor_{sensor_id}" if not str(sensor_id).startswith('sensor_') else str(sensor_id)
+                
+                # Create structure compatible with /api/sensors/all
+                sensor_info = {
+                    'name': data.get('sensor_name', f'Sensor {sensor_id}'),
+                    'aqi': data.get('aqi', 0),
+                    'pollutants': {
+                        'pm2_5': data.get('sensor_data', {}).get('pm2_5', data.get('pm25', 0)),
+                        'pm10': data.get('sensor_data', {}).get('pm10', data.get('pm10', 0)),
+                        'co2': data.get('sensor_data', {}).get('co2', data.get('co2', 0)),
+                        'tvoc': data.get('sensor_data', {}).get('tvoc', data.get('tvoc', 0)),
+                    },
+                    'environmental': {
+                        'temperature': data.get('sensor_data', {}).get('temperature', data.get('temperature', 0)),
+                        'humidity': data.get('sensor_data', {}).get('humidity', data.get('humidity', 0)),
+                        'pressure': data.get('sensor_data', {}).get('pressure', data.get('pressure', 0)),
+                    },
+                    'predictions': data.get('predictions', {})
+                }
+                
+                if 'sensors' not in all_sensors_data or not isinstance(all_sensors_data['sensors'], dict):
+                    all_sensors_data['sensors'] = {}
+                
+                all_sensors_data['sensors'][sensor_key] = sensor_info
+                all_sensors_data['timestamp'] = datetime.now().isoformat()
+                all_sensors_data['total_sensors'] = len(all_sensors_data['sensors'])
+            
+            # Enhanced logging with ALL sensor data
+            sensor_id = data.get('sensor_id', 'Unknown')
+            sensor_name = data.get('sensor_name', 'N/A')
+            timestamp = data.get('timestamp', 'N/A')
+            
+            # Get all pollutant values
+            aqi = data.get('aqi', 0)
+            pm25 = data.get('pm25', 0)
+            pm10 = data.get('pm10', 0)
+            co2 = data.get('co2', 0)
+            tvoc = data.get('tvoc', 0)
+            temp = data.get('temperature', 0)
+            hum = data.get('humidity', 0)
+            pres = data.get('pressure', 0)
+            
+            # Comprehensive log with all pollutants
+            logger.info(f"📊 Sensor {sensor_id} ({sensor_name})")
+            logger.info(f"   AQI: {aqi} (from PM2.5={pm25})")
+            logger.info(f"   Pollutants: PM2.5={pm25}, PM10={pm10}, CO2={co2}, TVOC={tvoc}")
+            logger.info(f"   Environment: Temp={temp}°C, Humidity={hum}%, Pressure={pres}hPa")
+            logger.info(f"   Time: {timestamp}")
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Prediction data received',
+                'timestamp': latest_prediction['timestamp']
+            }), 200
         
-        logger.info(f"Received prediction data: AQI={data.get('aqi', 'N/A')}")
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Prediction data received',
-            'timestamp': latest_prediction['timestamp']
-        }), 200
+    except Exception as e:
+        logger.error(f"Error receiving prediction: {str(e)}")
+        return jsonify({'error': str(e)}), 500
         
     except Exception as e:
         logger.error(f"Error receiving prediction: {str(e)}")
@@ -99,6 +181,59 @@ def get_latest_prediction():
         logger.error(f"Error fetching prediction: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/sensors/all', methods=['GET'])
+def get_all_sensors():
+    """
+    Get the latest data from ALL 5 sensors for the dashboard
+    Returns real sensor data, NO dummy data
+    """
+    try:
+        # Return multi-sensor data if available
+        if all_sensors_data.get('sensors'):
+            return jsonify({
+                'status': 'success',
+                'timestamp': all_sensors_data.get('timestamp'),
+                'total_sensors': all_sensors_data.get('total_sensors', 0),
+                'sensors': all_sensors_data['sensors']
+            }), 200
+        
+        # Fallback: if no multi-sensor data, return single sensor if available
+        elif latest_prediction['data'] is not None:
+            return jsonify({
+                'status': 'success',
+                'timestamp': latest_prediction['timestamp'],
+                'total_sensors': 1,
+                'sensors': {
+                    'sensor_3': {
+                        'name': latest_prediction['data'].get('sensor_name', 'Sensor 3'),
+                        'aqi': latest_prediction['data'].get('aqi', 0),
+                        'pollutants': {
+                            'pm2_5': latest_prediction['data'].get('pm25', 0),
+                            'pm10': latest_prediction['data'].get('pm10', 0),
+                            'co2': latest_prediction['data'].get('co2', 0),
+                            'tvoc': latest_prediction['data'].get('tvoc', 0),
+                        },
+                        'environmental': {
+                            'temperature': latest_prediction['data'].get('temperature', 0),
+                            'humidity': latest_prediction['data'].get('humidity', 0),
+                            'pressure': latest_prediction['data'].get('pressure', 0),
+                        }
+                    }
+                }
+            }), 200
+        else:
+            return jsonify({
+                'status': 'no_data',
+                'message': 'No sensor data available yet. Please wait for sensors to send data.',
+                'timestamp': None,
+                'total_sensors': 0,
+                'sensors': {}
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"Error fetching all sensors: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 # Chat endpoint - proxy to LM Studio
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -124,46 +259,88 @@ def chat():
         include_context = data.get('include_context', True)  # Enabled by default for air quality context
         
         # Add air quality context if requested and available
-        if include_context and latest_prediction['data'] is not None:
-            pred_data = latest_prediction['data']
+        # Priority: Multi-sensor data > Single sensor data
+        context_parts = []
+        
+        if include_context:
+            # Check for multi-sensor data first
+            if all_sensors_data.get('sensors'):
+                # Build comprehensive context for all sensors
+                sensor_contexts = []
+                for sensor_key, sensor_info in all_sensors_data['sensors'].items():
+                    sensor_num = sensor_key.split('_')[1]  # Extract number from 'sensor_1'
+                    pollutants = sensor_info.get('pollutants', {})
+                    environmental = sensor_info.get('environmental', {})
+                    predictions = sensor_info.get('predictions', {})
+                    
+                    # Build sensor context with current values
+                    sensor_parts = [f"Sensor {sensor_num}: AQI={sensor_info.get('aqi', 0)}"]
+                    
+                    # Pollutants
+                    if pollutants.get('pm2_5'): sensor_parts.append(f"PM2.5={pollutants['pm2_5']}")
+                    if pollutants.get('pm10'): sensor_parts.append(f"PM10={pollutants['pm10']}")
+                    if pollutants.get('co2'): sensor_parts.append(f"CO2={pollutants['co2']}")
+                    if pollutants.get('tvoc'): sensor_parts.append(f"TVOC={pollutants['tvoc']}")
+                    
+                    # Environmental
+                    if environmental.get('temperature'): sensor_parts.append(f"Temp={environmental['temperature']}°C")
+                    if environmental.get('humidity'): sensor_parts.append(f"Humidity={environmental['humidity']}%")
+                    if environmental.get('pressure'): sensor_parts.append(f"Pressure={environmental['pressure']}mb")
+                    
+                    # Predictions (if available)
+                    if predictions:
+                        pred_parts = []
+                        if predictions.get('pm2_5'): pred_parts.append(f"PM2.5→{predictions['pm2_5']}")
+                        if predictions.get('pm10'): pred_parts.append(f"PM10→{predictions['pm10']}")
+                        if pred_parts:
+                            sensor_parts.append(f"Predictions:[{','.join(pred_parts)}]")
+                    
+                    sensor_contexts.append(", ".join(sensor_parts))
+                
+                context_parts.append(" | ".join(sensor_contexts))
+                
+            # Fallback to single sensor data
+            elif latest_prediction['data'] is not None:
+                pred_data = latest_prediction['data']
+                
+                # Ultra-compact context with ALL data
+                parts = []
+                
+                # AQI
+                if 'aqi' in pred_data:
+                    parts.append(f"AQI={pred_data['aqi']}")
+                
+                # All current readings (compact)
+                if 'sensor_data' in pred_data and pred_data['sensor_data']:
+                    sd = pred_data['sensor_data']
+                    curr = []
+                    if 'pm2_5' in sd: curr.append(f"PM2.5={sd['pm2_5']}")
+                    if 'pm10' in sd: curr.append(f"PM10={sd['pm10']}")
+                    if 'co2' in sd: curr.append(f"CO2={sd['co2']}")
+                    if 'tvoc' in sd: curr.append(f"TVOC={sd['tvoc']}")
+                    if 'temperature' in sd: curr.append(f"T={sd['temperature']}")
+                    if 'humidity' in sd: curr.append(f"H={sd['humidity']}")
+                    if curr:
+                        parts.append(",".join(curr))
+                
+                context_parts.extend(parts)
+        
+        # Add context to messages if we have any
+        if context_parts:
+            # Construct a clear, descriptive system instruction
+            system_instruction = (
+                "You are AirSense AI, an advanced air quality assistant. "
+                "You have real-time access to 5 high-precision sensors. "
+                "Current data for sensors: \n" + "\n".join(sensor_contexts) + "\n\n"
+                "When answering, refer to specific sensor data to give advice. "
+                "Analyze trends (Predictions) if available. Keep responses informative but direct."
+            )
             
-            # Ultra-compact context with ALL data
-            parts = []
-            
-            # AQI
-            if 'aqi' in pred_data:
-                parts.append(f"AQI={pred_data['aqi']}")
-            
-            # All current readings (compact)
-            if 'sensor_data' in pred_data and pred_data['sensor_data']:
-                sd = pred_data['sensor_data']
-                curr = []
-                if 'pm2_5' in sd: curr.append(f"PM2.5={sd['pm2_5']}")
-                if 'pm10' in sd: curr.append(f"PM10={sd['pm10']}")
-                if 'co2' in sd: curr.append(f"CO2={sd['co2']}")
-                if 'tvoc' in sd: curr.append(f"TVOC={sd['tvoc']}")
-                if 'temperature' in sd: curr.append(f"T={sd['temperature']}")
-                if 'humidity' in sd: curr.append(f"H={sd['humidity']}")
-                if curr:
-                    parts.append(",".join(curr))
-            
-            # All predictions (compact)
-            if 'predictions' in pred_data and pred_data['predictions']:
-                preds = pred_data['predictions']
-                p = []
-                for name in ['PM2.5', 'PM10', 'CO2', 'TVOC']:
-                    if name in preds and 'predicted' in preds[name]:
-                        p.append(f"{name}→{preds[name]['predicted']}")
-                if p:
-                    parts.append(",".join(p))
-            
-            context = ", ".join(parts) + ". Answer concisely."
-            
-            context_message = {
-                'role': 'system',
-                'content': context
-            }
-            messages.insert(0, context_message)
+            # Insert at the beginning as the primary instruction
+            messages.insert(0, {
+                'role': 'system', 
+                'content': system_instruction
+            })
 
         
         # Forward request to LM Studio
@@ -173,7 +350,8 @@ def chat():
             'model': LM_STUDIO_MODEL,
             'messages': messages,
             'temperature': 0.7,
-            'max_tokens': 250  # Complete but concise
+            'max_tokens': 1200,  # Increased to prevent truncation
+            'stop': ["\n\n\n", "User:"] # Prevention for loops
         }
         
         logger.info(f"Forwarding chat request to LM Studio: {lm_studio_url}")

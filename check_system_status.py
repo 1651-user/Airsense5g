@@ -96,13 +96,13 @@ try:
     response = requests.get('http://localhost:5000/api/test-llm', timeout=5)
     if response.status_code == 200:
         print("   ✅ CONNECTED")
-        print("   → URL: http://192.168.1.147:1234")
+        print("   → URL: http://192.168.0.103:1234")
         status['phi2'] = True
     else:
         print(f"   ⚠️  Status {response.status_code}")
 except:
     print("   ❌ NOT CONNECTED")
-    print("   → Ensure LM Studio is running on 192.168.1.147")
+    print("   → Ensure LM Studio is running on 192.168.0.103")
 
 # Check 5: Flutter App
 print("\n5️⃣  Flutter App")
@@ -144,6 +144,6 @@ else:
     if not status['mqtt_data']:
         print("→ Start MQTT: python mqtt_to_phi2.py")
     if not status['phi2']:
-        print("→ Start LM Studio on 192.168.1.147")
+        print("→ Start LM Studio on 192.168.0.103")
 
 print("\n" + "="*80)

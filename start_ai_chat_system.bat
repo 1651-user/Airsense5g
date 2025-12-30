@@ -33,7 +33,7 @@ echo   - Backend Server (http://localhost:5000)
 echo   - MQTT Pipeline (collecting data and generating predictions)
 echo.
 echo Next steps:
-echo   1. Ensure LM Studio is running (http://localhost:1234)
+echo   1. Ensure LM Studio is running (http://192.168.0.103:1234)
 echo   2. Wait for MQTT data to be received (check MQTT Pipeline window)
 echo   3. Run the Flutter app and open the Chat screen
 echo   4. Ask: "Show the pollutant levels"

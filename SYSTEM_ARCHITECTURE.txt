@@ -1,0 +1,210 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       ENHANCED AI SYSTEM ARCHITECTURE                        │
+│                     NaN Handling + Row Appending + Dashboard                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              MQTT BROKER (LIVE)                               │
+│                    Receives data from 5 air quality sensors                   │
+└───────────────────────────┬──────────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌───────────────────────────────────────────────────┐
+        │         JSON FILES (Local Storage)                 │
+        │  • mqtt_data_sensor1.json                         │
+        │  • mqtt_data_sensor2.json (missing currently)     │
+        │  • mqtt_data.json (Sensor 3)                      │
+        │  • mqtt_data_sensor4.json                         │
+        │  • mqtt_data_sensor5.json                         │
+        └───────────────────┬───────────────────────────────┘
+                            │
+                            ▼
+        ┌─────────────────────────────────────────────────────────────────┐
+        │        EXCEL INTEGRATION (excel_integration_enhanced.py)        │
+        │                                                                  │
+        │  Features:                                                       │
+        │  ✓ Monitors JSON files for changes (file watcher)              │
+        │  ✓ Appends new data as ROWS only                               │
+        │  ✓ Never creates new columns                                   │
+        │  ✓ Maps JSON short names → Excel long names                    │
+        │  ✓ Removes duplicates based on timestamp                       │
+        │  ✓ Preserves existing column structure                         │
+        │                                                                  │
+        │  Example:                                                        │
+        │    JSON: {"pm2_5": 32.5, "pm10": 45.2}                         │
+        │      ↓                                                           │
+        │    Excel Row: [uplink_message.decoded_payload.pm2_5: 32.5]     │
+        └───────────────────┬─────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌─────────────────────────────────────────────────────────────────┐
+        │              EXCEL FILES (Historical Data)                       │
+        │                                                                  │
+        │  Sensor 1: output1.xlsx  →  903 rows, 42 columns               │
+        │  Sensor 2: output2.xlsx  →  756 rows, 47 columns               │
+        │  Sensor 3: output3.xlsx  →  884 rows, 47 columns               │
+        │  Sensor 4: output4.xlsx  →  847 rows, 47 columns               │
+        │  Sensor 5: output5.xlsx  →  816 rows, 47 columns               │
+        │                                                                  │
+        │  Columns: uplink_message.decoded_payload.*                      │
+        │    • pm2_5, pm10, co2, tvoc                                    │
+        │    • temperature, humidity, pressure                            │
+        │    • battery, light_level, pir                                  │
+        │                                                                  │
+        │  NaN Values: 2500-3700 per file (handled automatically)        │
+        └───────────────────┬─────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌─────────────────────────────────────────────────────────────────┐
+        │         LIVE AI SYSTEM (live_ai_system_enhanced.py)             │
+        │                                                                  │
+        │  Features:                                                       │
+        │  ✓ Monitors all 5 sensors every 30 seconds                     │
+        │  ✓ Reads ENTIRE Excel sheet (complete history)                 │
+        │  ✓ Automatically ignores NaN values                            │
+        │  ✓ Finds most recent valid data row                            │
+        │  ✓ Generates predictions using clean data                      │
+        │  ✓ Updates dashboard when new data arrives                     │
+        │  ✓ Uses latest data if no new readings                         │
+        │                                                                  │
+        │  NaN Handling Process:                                          │
+        │    1. Read entire Excel → 884 rows                             │
+        │    2. Remove empty rows → 880 valid rows                       │
+        │    3. Search last 20 rows for valid PM2.5/PM10                 │
+        │    4. Extract non-NaN values from fields                       │
+        │    5. Generate predictions with clean data                     │
+        │                                                                  │
+        │  Data Flow:                                                     │
+        │    Excel → Filter NaN → Extract Values → Predict → Send        │
+        └───────────────────┬─────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌─────────────────────────────────────────────────────────────────┐
+        │                    PREDICTION ENGINE                             │
+        │                                                                  │
+        │  Models: models/*.pkl (Linear Regression)                       │
+        │    • pm2_5_model.pkl + pm2_5_scaler.pkl                        │
+        │    • pm10_model.pkl + pm10_scaler.pkl                          │
+        │    • co2_model.pkl + co2_scaler.pkl                            │
+        │    • tvoc_model.pkl + tvoc_scaler.pkl                          │
+        │    • temperature_model.pkl + temperature_scaler.pkl            │
+        │    • humidity_model.pkl + humidity_scaler.pkl                  │
+        │    • pressure_model.pkl + pressure_scaler.pkl                  │
+        │                                                                  │
+        │  Current Values → Model → Predicted Values                      │
+        │  Example:                                                        │
+        │    PM2.5: 32.5 → 33.2 µg/m³ (↑ 2%)                            │
+        │    AQI: 85 (Moderate)                                          │
+        └───────────────────┬─────────────────────────────────────────────┘
+                            │
+                            ▼
+        ┌─────────────────────────────────────────────────────────────────┐
+        │              BACKEND/DASHBOARD (Flask Server)                    │
+        │                                                                  │
+        │  Endpoint: POST /api/predictions                                │
+        │  URL: http://localhost:5000                                     │
+        │                                                                  │
+        │  Received Data:                                                  │
+        │  {                                                               │
+        │    "timestamp": "2025-12-30T11:44:38",                         │
+        │    "sensor_id": 3,                                             │
+        │    "aqi": 85,                                                  │
+        │    "pm25": 33.2,                                               │
+        │    "predictions": {                                            │
+        │      "PM2.5": {"current": 32.5, "predicted": 33.2},          │
+        │      "PM10": {"current": 45.2, "predicted": 46.1},           │
+        │      ...                                                       │
+        │    }                                                            │
+        │  }                                                              │
+        │                                                                  │
+        │  Updates: Real-time when new data, or every 30s with latest    │
+        └─────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              UPDATE SCENARIOS                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Scenario 1: NEW DATA ARRIVES
+─────────────────────────────
+[12:30:00] MQTT → JSON updated
+[12:30:01] Excel Integration → Appends 1 new row
+[12:30:15] Live AI → Detects change
+[12:30:16] Live AI → Reads Excel (ignores NaN)
+[12:30:17] Live AI → Generates predictions
+[12:30:18] Live AI → Updates dashboard ✓
+
+
+Scenario 2: NO NEW DATA
+────────────────────────
+[12:30:00] No MQTT updates
+[12:30:30] Live AI → 30 second check
+[12:30:31] Live AI → Uses latest Excel data
+[12:30:32] Live AI → Generates predictions
+[12:30:33] Live AI → Updates dashboard ✓
+
+
+Scenario 3: NaN VALUES IN ROW
+──────────────────────────────
+[12:30:00] Read Excel row: [PM2.5: NaN, PM10: 45.2, CO2: 850]
+[12:30:01] System → Searches last 20 rows for valid PM2.5
+[12:30:02] Found row 879: [PM2.5: 32.5, PM10: 45.2, CO2: 850]
+[12:30:03] Uses valid data → Predictions ✓
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          SYSTEM REQUIREMENTS                                  │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Python Packages:
+  • pandas (Excel/data manipulation)
+  • numpy (numerical operations)
+  • openpyxl (Excel file handling)
+  • watchdog (file monitoring)
+  • requests (HTTP requests)
+  • scikit-learn (ML models)
+  • joblib (model loading)
+
+Files Required:
+  • Excel files: output1.xlsx, output2.xlsx, output3.xlsx, output4.xlsx, output5.xlsx
+  • JSON files: mqtt_data*.json
+  • Model files: models/*.pkl
+
+Optional:
+  • Backend server running on localhost:5000
+  • MQTT broker for live data
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           QUICK START COMMANDS                                │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+One-Click Start:
+  > start_enhanced_system.bat
+
+Manual Start:
+  Terminal 1: python excel_integration_enhanced.py
+  Terminal 2: python live_ai_system_enhanced.py
+
+Test System:
+  > python test_enhanced_system.py
+
+One-Time Prediction:
+  > python predict_with_excel_enhanced.py --sensor 3
+  > python predict_with_excel_enhanced.py --all
+
+Continuous Prediction:
+  > python predict_with_excel_enhanced.py --all --continuous
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                  STATUS                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+✅ Excel Integration: Ready (monitors MQTT → appends rows)
+✅ Prediction Engine: Ready (NaN-aware predictions)
+✅ Live AI System: Ready (monitors + updates dashboard)
+✅ All 5 Sensors: Configured and tested
+✅ NaN Handling: Automatic (ignores invalid values)
+✅ Row Appending: Working (no new columns)
+✅ Dashboard Updates: Configured (real-time + fallback)
+
+System Version: 2.0 - Enhanced NaN Handling & Dashboard Updates
+Last Updated: 2025-12-30

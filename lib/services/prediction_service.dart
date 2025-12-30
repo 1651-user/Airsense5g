@@ -5,12 +5,12 @@ import 'package:airsense_5g/models/prediction_model.dart';
 class PredictionService {
   final Dio _dio = Dio();
 
-  // Backend server URL - change this to your computer's IP if testing on physical device
+  // Backend server URL - Updated to use actual computer IP
   // For emulator: http://10.0.2.2:5000 (Android) or http://localhost:5000 (iOS)
-  // For physical device: http://YOUR_COMPUTER_IP:5000
+  // For physical device: http://192.168.1.16:5000
   final String _baseUrl = kIsWeb
       ? 'http://localhost:5000/api'
-      : 'http://10.0.2.2:5000/api'; // Android emulator default
+      : 'http://192.168.1.16:5000/api'; // Use actual computer IP
 
   PredictionData? _cachedPrediction;
   DateTime? _lastFetchTime;
