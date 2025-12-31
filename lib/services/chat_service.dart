@@ -81,7 +81,7 @@ class ChatService {
         userId: userId,
         message: query,
         response:
-            'Sorry, I\'m having trouble connecting to the AI service right now. Please make sure the backend server is running at http://192.168.1.147:5000',
+            'Sorry, I\'m having trouble connecting to the AI service right now. Please make sure the backend server is running at http://192.168.1.16:5000',
         timestamp: DateTime.now(),
         isUser: false,
       );

@@ -79,11 +79,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             count,
         co2: _sensors.map((s) => s.currentData.co2).reduce((a, b) => a + b) /
             count,
-        no2: _sensors.map((s) => s.currentData.no2).reduce((a, b) => a + b) /
-            count,
-        so2: _sensors.map((s) => s.currentData.so2).reduce((a, b) => a + b) /
-            count,
-        o3: _sensors.map((s) => s.currentData.o3).reduce((a, b) => a + b) /
+        tvoc: _sensors.map((s) => s.currentData.tvoc).reduce((a, b) => a + b) /
             count,
         aqi: (_sensors.map((s) => s.currentData.aqi).reduce((a, b) => a + b) /
                 count)
@@ -142,7 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                     const SizedBox(height: 32),
-                    if (avgData != null) _buildAQIGauge(avgData),
+                    if (_sensors.isNotEmpty) _buildMultiSensorAQI(),
                     const SizedBox(height: 32),
                     _buildRiskLevelCard(),
                     const SizedBox(height: 20),
@@ -157,60 +153,101 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAQIGauge(SensorData data) {
-    final colorScheme = Theme.of(context).colorScheme;
-
+  Widget _buildMultiSensorAQI() {
     return Column(
       children: [
-        SizedBox(
-          height: 250,
-          width: 250,
-          child: CustomPaint(
-            painter: AQICirclePainter(
-                aqi: data.aqi,
-                isDark: Theme.of(context).brightness == Brightness.dark),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _getAQIIcon(data.aqi),
-                    size: 48,
-                    color: _getAQIColor(data.aqi),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${data.aqi}',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                          color: _getAQIColor(data.aqi),
-                          fontSize: 64,
-                          fontWeight: FontWeight.w300,
-                          fontFamily: 'Roboto',
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    SensorService().getAQICategory(data.aqi).toUpperCase(),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: _getAQIColor(data.aqi),
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
-              ),
-            ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: _sensors
+                .map((sensor) => _buildCompactAQIGauge(sensor))
+                .toList(),
           ),
         ),
         const SizedBox(height: 16),
         Text(
           'Last updated: Just now',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 14,
               ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCompactAQIGauge(Sensor sensor) {
+    final data = sensor.currentData;
+    final aqiColor = _getAQIColor(data.aqi);
+
+    return Container(
+      width: 180,
+      margin: const EdgeInsets.only(right: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withOpacity(0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.1)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            sensor.name,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 140,
+            width: 140,
+            child: CustomPaint(
+              painter: AQICirclePainter(
+                  aqi: data.aqi,
+                  isDark: Theme.of(context).brightness == Brightness.dark,
+                  strokeWidth: 10.0),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _getAQIIcon(data.aqi),
+                      size: 24,
+                      color: aqiColor,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${data.aqi}',
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: aqiColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 32,
+                              ),
+                    ),
+                    Text(
+                      SensorService().getAQICategory(data.aqi).toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: aqiColor,
+                            fontSize: 9,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -394,20 +431,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          // Display all 5 sensors
-          ..._sensors.asMap().entries.map((entry) {
-            final index = entry.key;
-            final sensor = entry.value;
-            return _buildSensorSection(index + 1, sensor);
+          // Display all available sensors with their real labels
+          ..._sensors.map((sensor) {
+            return _buildSensorSection(sensor);
           }),
         ],
       ),
     );
   }
 
-  Widget _buildSensorSection(int sensorNumber, Sensor sensor) {
+  Widget _buildSensorSection(Sensor sensor) {
     final colorScheme = Theme.of(context).colorScheme;
     final data = sensor.currentData;
+
+    // Extract the number from the name (e.g., "Sensor 3" -> "3")
+    final displayId = sensor.name.replaceAll(RegExp(r'[^0-9]'), '');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -432,7 +470,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             child: Center(
               child: Text(
-                '$sensorNumber',
+                displayId.isNotEmpty ? displayId : '?',
                 style: TextStyle(
                   color: colorScheme.primary,
                   fontSize: 18,
@@ -442,7 +480,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           title: Text(
-            'Sensor $sensorNumber',
+            sensor.name,
             style: TextStyle(
               color: colorScheme.onSurface,
               fontSize: 15,
@@ -464,11 +502,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildPollutantRow(
                 'PM10', data.pm10, 'avg', '45.0', 'µg/m³', Colors.red),
             _buildPollutantRow(
-                'O3', data.o3, 'avg', '100.0', 'ppb', Colors.green),
+                'TVOC', data.tvoc, 'avg', '100.0', 'ppb', Colors.green),
             _buildPollutantRow(
-                'NO2', data.no2, 'avg', '40.0', 'ppb', Colors.green),
+                'Temp', data.temperature, 'avg', '30.0', '°C', Colors.orange),
             _buildPollutantRow(
-                'SO2', data.so2, 'avg', '40.0', 'ppb', Colors.green),
+                'Humidity', data.humidity, 'avg', '60.0', '%', Colors.blue),
+            _buildPollutantRow('Pressure', data.pressure, 'avg', '1013.2',
+                'hPa', Colors.purple),
             _buildPollutantRow(
                 'CO2', data.co2, 'avg', '400.0', 'ppm', Colors.orange),
           ],
@@ -564,20 +604,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class AQICirclePainter extends CustomPainter {
   final int aqi;
   final bool isDark;
+  final double strokeWidth;
 
-  AQICirclePainter({required this.aqi, required this.isDark});
+  AQICirclePainter({
+    required this.aqi,
+    required this.isDark,
+    this.strokeWidth = 15.0,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2;
-    const strokeWidth = 15.0;
 
     // Background Arc
     final bgPaint = Paint()
-      ..color = isDark
-          ? const Color(0xFF1F1A2E)
-          : const Color(0xFFF0F0F0) // Matches card color
+      ..color = isDark ? const Color(0xFF1F1A2E) : const Color(0xFFF0F0F0)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
@@ -594,8 +636,8 @@ class AQICirclePainter extends CustomPainter {
     final progressPaint = Paint()
       ..shader = LinearGradient(
         colors: [
-          const Color(0xFFFF2E63), // Red/Pink Accent
-          const Color(0xFFC2185B), // Darker Pink/Red
+          const Color(0xFFFF2E63),
+          const Color(0xFFC2185B),
         ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -618,6 +660,8 @@ class AQICirclePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant AQICirclePainter oldDelegate) {
-    return oldDelegate.aqi != aqi || oldDelegate.isDark != isDark;
+    return oldDelegate.aqi != aqi ||
+        oldDelegate.isDark != isDark ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

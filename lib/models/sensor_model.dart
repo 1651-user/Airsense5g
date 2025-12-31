@@ -57,9 +57,7 @@ class SensorData {
   final double pm25;
   final double pm10;
   final double co2;
-  final double no2;
-  final double so2;
-  final double o3;
+  final double tvoc;
   final int aqi;
   final double temperature;
   final double humidity;
@@ -70,9 +68,7 @@ class SensorData {
     required this.pm25,
     required this.pm10,
     required this.co2,
-    required this.no2,
-    required this.so2,
-    required this.o3,
+    required this.tvoc,
     required this.aqi,
     required this.temperature,
     required this.humidity,
@@ -84,9 +80,7 @@ class SensorData {
         pm25: 0,
         pm10: 0,
         co2: 0,
-        no2: 0,
-        so2: 0,
-        o3: 0,
+        tvoc: 0,
         aqi: 0,
         temperature: 0,
         humidity: 0,
@@ -98,9 +92,7 @@ class SensorData {
         'pm25': pm25,
         'pm10': pm10,
         'co2': co2,
-        'no2': no2,
-        'so2': so2,
-        'o3': o3,
+        'tvoc': tvoc,
         'aqi': aqi,
         'temperature': temperature,
         'humidity': humidity,
@@ -112,9 +104,7 @@ class SensorData {
         pm25: json['pm25']?.toDouble() ?? 0.0,
         pm10: json['pm10']?.toDouble() ?? 0.0,
         co2: json['co2']?.toDouble() ?? 0.0,
-        no2: json['no2']?.toDouble() ?? 0.0,
-        so2: json['so2']?.toDouble() ?? 0.0,
-        o3: json['o3']?.toDouble() ?? 0.0,
+        tvoc: json['tvoc']?.toDouble() ?? 0.0,
         aqi: json['aqi']?.toInt() ?? 0,
         temperature: json['temperature']?.toDouble() ?? 0.0,
         humidity: json['humidity']?.toDouble() ?? 0.0,
@@ -128,9 +118,7 @@ class SensorData {
     double? pm25,
     double? pm10,
     double? co2,
-    double? no2,
-    double? so2,
-    double? o3,
+    double? tvoc,
     int? aqi,
     double? temperature,
     double? humidity,
@@ -141,9 +129,7 @@ class SensorData {
         pm25: pm25 ?? this.pm25,
         pm10: pm10 ?? this.pm10,
         co2: co2 ?? this.co2,
-        no2: no2 ?? this.no2,
-        so2: so2 ?? this.so2,
-        o3: o3 ?? this.o3,
+        tvoc: tvoc ?? this.tvoc,
         aqi: aqi ?? this.aqi,
         temperature: temperature ?? this.temperature,
         humidity: humidity ?? this.humidity,

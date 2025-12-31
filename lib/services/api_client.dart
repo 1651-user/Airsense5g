@@ -10,7 +10,7 @@ class ApiClient {
 
   ApiClient._internal() {
     _dio = Dio(BaseOptions(
-      baseUrl: 'http://192.168.1.147:5000', // LOCAL BACKEND - Real sensor data
+      baseUrl: 'http://192.168.1.16:5000', // LOCAL BACKEND - Real sensor data
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       headers: {'Content-Type': 'application/json'},

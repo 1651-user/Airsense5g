@@ -38,8 +38,9 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
     setState(() => _isLoading = true);
 
     final history = await SensorService().getSensorHistory(widget.sensor.id);
-    final forecast = await ForecastService().getForecast(widget.sensor.id, widget.sensor.currentData.aqi, widget.sensor.currentData.pm25);
-    
+    final forecast = await ForecastService().getForecast(widget.sensor.id,
+        widget.sensor.currentData.aqi, widget.sensor.currentData.pm25);
+
     final user = await AuthService().getCurrentUser();
     HealthProfile? profile;
     String advice = 'Check your health profile for personalized advice.';
@@ -47,7 +48,8 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
     if (user != null) {
       profile = await HealthProfileService().getProfile(user.id);
       if (profile != null) {
-        advice = AlertService().getHealthAdvice(profile, widget.sensor.currentData.aqi, widget.sensor.currentData.pm25);
+        advice = AlertService().getHealthAdvice(profile,
+            widget.sensor.currentData.aqi, widget.sensor.currentData.pm25);
       }
     }
 
@@ -78,87 +80,188 @@ class _SensorDetailScreenState extends State<SensorDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.sensor.name, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-        leading: IconButton(icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.onSurface), onPressed: () => Navigator.of(context).pop()),
+        title: Text(widget.sensor.name,
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold)),
+        leading: IconButton(
+            icon: Icon(Icons.arrow_back,
+                color: Theme.of(context).colorScheme.onSurface),
+            onPressed: () => Navigator.of(context).pop()),
       ),
-      body: _isLoading ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary)) : SingleChildScrollView(
-        padding: AppSpacing.paddingLg,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
+      body: _isLoading
+          ? Center(
+              child: CircularProgressIndicator(
+                  color: Theme.of(context).colorScheme.primary))
+          : SingleChildScrollView(
               padding: AppSpacing.paddingLg,
-              decoration: BoxDecoration(color: aqiColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: aqiColor)),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    padding: AppSpacing.paddingLg,
+                    decoration: BoxDecoration(
+                        color: aqiColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        border: Border.all(color: aqiColor)),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Current AQI',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant)),
+                                const SizedBox(height: 4),
+                                Text(aqi.toString(),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .displayMedium
+                                        ?.copyWith(
+                                            color: aqiColor,
+                                            fontWeight: FontWeight.bold)),
+                                Text(SensorService().getAQICategory(aqi),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(color: aqiColor)),
+                              ],
+                            ),
+                            Icon(Icons.location_on, color: aqiColor, size: 48),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(widget.sensor.location,
+                            style: Theme.of(context).textTheme.bodyMedium),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text('Real-time Values',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Current AQI', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                          const SizedBox(height: 4),
-                          Text(aqi.toString(), style: Theme.of(context).textTheme.displayMedium?.copyWith(color: aqiColor, fontWeight: FontWeight.bold)),
-                          Text(SensorService().getAQICategory(aqi), style: Theme.of(context).textTheme.titleMedium?.copyWith(color: aqiColor)),
-                        ],
-                      ),
-                      Icon(Icons.location_on, color: aqiColor, size: 48),
+                      Expanded(
+                          child: PollutantCard(
+                              label: 'PM2.5',
+                              value: widget.sensor.currentData.pm25
+                                  .toStringAsFixed(1),
+                              unit: 'µg/m³')),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: PollutantCard(
+                              label: 'PM10',
+                              value: widget.sensor.currentData.pm10
+                                  .toStringAsFixed(1),
+                              unit: 'µg/m³')),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: PollutantCard(
+                              label: 'CO₂',
+                              value: widget.sensor.currentData.co2
+                                  .toStringAsFixed(0),
+                              unit: 'ppm')),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: PollutantCard(
+                              label: 'TVOC',
+                              value: widget.sensor.currentData.tvoc
+                                  .toStringAsFixed(1),
+                              unit: 'ppb')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: PollutantCard(
+                              label: 'Temp',
+                              value: widget.sensor.currentData.temperature
+                                  .toStringAsFixed(1),
+                              unit: '°C')),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: PollutantCard(
+                              label: 'Humidity',
+                              value: widget.sensor.currentData.humidity
+                                  .toStringAsFixed(1),
+                              unit: '%')),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  PollutantCard(
+                      label: 'Pressure',
+                      value:
+                          widget.sensor.currentData.pressure.toStringAsFixed(1),
+                      unit: 'hPa'),
+                  const SizedBox(height: 24),
+                  Text('24-Hour History',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-                  Text(widget.sensor.location, style: Theme.of(context).textTheme.bodyMedium),
+                  SizedBox(
+                      height: 200, child: HistoryChart(readings: _history)),
+                  const SizedBox(height: 24),
+                  if (_forecast != null) ...[
+                    Text('24-Hour Forecast',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                        height: 200,
+                        child: ForecastChart(forecast: _forecast!.hourly24)),
+                    const SizedBox(height: 24),
+                  ],
+                  if (_profile != null) ...[
+                    Text('Personalized Advice',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: AppSpacing.paddingMd,
+                      decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(AppRadius.md)),
+                      child: Row(
+                        children: [
+                          Icon(Icons.health_and_safety,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: Text(_advice,
+                                  style:
+                                      Theme.of(context).textTheme.bodyMedium)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            Text('Real-time Values', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: PollutantCard(label: 'PM2.5', value: widget.sensor.currentData.pm25.toStringAsFixed(1), unit: 'µg/m³')),
-                const SizedBox(width: 12),
-                Expanded(child: PollutantCard(label: 'PM10', value: widget.sensor.currentData.pm10.toStringAsFixed(1), unit: 'µg/m³')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: PollutantCard(label: 'CO₂', value: widget.sensor.currentData.co2.toStringAsFixed(0), unit: 'ppm')),
-                const SizedBox(width: 12),
-                Expanded(child: PollutantCard(label: 'O₃', value: widget.sensor.currentData.o3.toStringAsFixed(1), unit: 'ppb')),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Text('24-Hour History', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            SizedBox(height: 200, child: HistoryChart(readings: _history)),
-            const SizedBox(height: 24),
-            if (_forecast != null) ...[
-              Text('24-Hour Forecast', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              SizedBox(height: 200, child: ForecastChart(forecast: _forecast!.hourly24)),
-              const SizedBox(height: 24),
-            ],
-            if (_profile != null) ...[
-              Text('Personalized Advice', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              Container(
-                padding: AppSpacing.paddingMd,
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, borderRadius: BorderRadius.circular(AppRadius.md)),
-                child: Row(
-                  children: [
-                    Icon(Icons.health_and_safety, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_advice, style: Theme.of(context).textTheme.bodyMedium)),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -168,20 +271,34 @@ class PollutantCard extends StatelessWidget {
   final String value;
   final String unit;
 
-  const PollutantCard({super.key, required this.label, required this.value, required this.unit});
+  const PollutantCard(
+      {super.key,
+      required this.label,
+      required this.value,
+      required this.unit});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: AppSpacing.paddingMd,
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(AppRadius.md)),
+      decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(AppRadius.md)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
-          Text(value, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          Text(unit, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          Text(unit,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ],
       ),
     );
@@ -196,24 +313,46 @@ class HistoryChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (readings.isEmpty) {
-      return Center(child: Text('No data available', style: Theme.of(context).textTheme.bodyMedium));
+      return Center(
+          child: Text('No data available',
+              style: Theme.of(context).textTheme.bodyMedium));
     }
 
-    final spots = readings.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.aqi.toDouble())).toList();
+    final spots = readings
+        .asMap()
+        .entries
+        .map((e) => FlSpot(e.key.toDouble(), e.value.aqi.toDouble()))
+        .toList();
 
     return LineChart(
       LineChartData(
-        gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 50),
+        gridData: FlGridData(
+            show: true, drawVerticalLine: false, horizontalInterval: 50),
         titlesData: FlTitlesData(
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: Theme.of(context).textTheme.labelSmall))),
-          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 6, getTitlesWidget: (value, meta) {
-            if (value.toInt() >= 0 && value.toInt() < readings.length) {
-              return Text(DateFormat('HH:mm').format(readings[value.toInt()].timestamp), style: Theme.of(context).textTheme.labelSmall);
-            }
-            return const SizedBox.shrink();
-          })),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 40,
+                  getTitlesWidget: (value, meta) => Text(
+                      value.toInt().toString(),
+                      style: Theme.of(context).textTheme.labelSmall))),
+          bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                  showTitles: true,
+                  interval: 6,
+                  getTitlesWidget: (value, meta) {
+                    if (value.toInt() >= 0 && value.toInt() < readings.length) {
+                      return Text(
+                          DateFormat('HH:mm')
+                              .format(readings[value.toInt()].timestamp),
+                          style: Theme.of(context).textTheme.labelSmall);
+                    }
+                    return const SizedBox.shrink();
+                  })),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         borderData: FlBorderData(show: false),
         lineBarsData: [
@@ -223,7 +362,9 @@ class HistoryChart extends StatelessWidget {
             color: LightModeColors.lightPrimary,
             barWidth: 3,
             dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(show: true, color: LightModeColors.lightPrimary.withValues(alpha: 0.2)),
+            belowBarData: BarAreaData(
+                show: true,
+                color: LightModeColors.lightPrimary.withValues(alpha: 0.2)),
           ),
         ],
       ),
@@ -239,24 +380,46 @@ class ForecastChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (forecast.isEmpty) {
-      return Center(child: Text('No forecast available', style: Theme.of(context).textTheme.bodyMedium));
+      return Center(
+          child: Text('No forecast available',
+              style: Theme.of(context).textTheme.bodyMedium));
     }
 
-    final spots = forecast.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.aqi.toDouble())).toList();
+    final spots = forecast
+        .asMap()
+        .entries
+        .map((e) => FlSpot(e.key.toDouble(), e.value.aqi.toDouble()))
+        .toList();
 
     return LineChart(
       LineChartData(
-        gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 50),
+        gridData: FlGridData(
+            show: true, drawVerticalLine: false, horizontalInterval: 50),
         titlesData: FlTitlesData(
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: Theme.of(context).textTheme.labelSmall))),
-          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 6, getTitlesWidget: (value, meta) {
-            if (value.toInt() >= 0 && value.toInt() < forecast.length) {
-              return Text(DateFormat('HH:mm').format(forecast[value.toInt()].timestamp), style: Theme.of(context).textTheme.labelSmall);
-            }
-            return const SizedBox.shrink();
-          })),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 40,
+                  getTitlesWidget: (value, meta) => Text(
+                      value.toInt().toString(),
+                      style: Theme.of(context).textTheme.labelSmall))),
+          bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                  showTitles: true,
+                  interval: 6,
+                  getTitlesWidget: (value, meta) {
+                    if (value.toInt() >= 0 && value.toInt() < forecast.length) {
+                      return Text(
+                          DateFormat('HH:mm')
+                              .format(forecast[value.toInt()].timestamp),
+                          style: Theme.of(context).textTheme.labelSmall);
+                    }
+                    return const SizedBox.shrink();
+                  })),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         borderData: FlBorderData(show: false),
         lineBarsData: [
@@ -267,7 +430,9 @@ class ForecastChart extends StatelessWidget {
             barWidth: 3,
             dashArray: [5, 5],
             dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(show: true, color: LightModeColors.lightSecondary.withValues(alpha: 0.2)),
+            belowBarData: BarAreaData(
+                show: true,
+                color: LightModeColors.lightSecondary.withValues(alpha: 0.2)),
           ),
         ],
       ),

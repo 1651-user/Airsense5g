@@ -89,12 +89,7 @@ class SensorService {
                   pm25: (pollutants['pm2_5'] ?? 0).toDouble(),
                   pm10: (pollutants['pm10'] ?? 0).toDouble(),
                   co2: (pollutants['co2'] ?? 0).toDouble(),
-                  no2: (pollutants['no2'] ?? 0)
-                      .toDouble(), // May not be available
-                  so2: (pollutants['so2'] ?? 0)
-                      .toDouble(), // May not be available
-                  o3: (pollutants['o3'] ?? 0)
-                      .toDouble(), // May not be available
+                  tvoc: (pollutants['tvoc'] ?? 0).toDouble(),
                   aqi: (sensorInfo['aqi'] ?? 0).toInt(),
                   temperature: (environmental['temperature'] ?? 0).toDouble(),
                   humidity: (environmental['humidity'] ?? 0).toDouble(),
@@ -124,9 +119,7 @@ class SensorService {
                 pm25: 0,
                 pm10: 0,
                 co2: 0,
-                no2: 0,
-                so2: 0,
-                o3: 0,
+                tvoc: 0,
                 aqi: 0,
                 temperature: 0,
                 humidity: 0,
@@ -154,9 +147,7 @@ class SensorService {
             pm25: 0,
             pm10: 0,
             co2: 0,
-            no2: 0,
-            so2: 0,
-            o3: 0,
+            tvoc: 0,
             aqi: 0,
             temperature: 0,
             humidity: 0,
@@ -208,9 +199,7 @@ class SensorService {
           pm25: pm25Variation.clamp(0, 500),
           pm10: pm10Variation.clamp(0, 500),
           co2: sensor.currentData.co2 + (_random.nextDouble() - 0.5) * 100,
-          no2: 5 + _random.nextDouble() * 45,
-          so2: 2 + _random.nextDouble() * 18,
-          o3: 10 + _random.nextDouble() * 90,
+          tvoc: sensor.currentData.tvoc + (_random.nextDouble() - 0.5) * 50,
           aqi: _calculateAQI(pm25Variation, pm10Variation),
         );
       });

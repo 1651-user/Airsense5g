@@ -17,7 +17,7 @@ app = Flask(__name__)
 CORS(app, origins=os.getenv('CORS_ORIGINS', '*'))
 
 # Configuration
-LM_STUDIO_BASE_URL = os.getenv('LM_STUDIO_BASE_URL', 'http://192.168.0.103:1234/v1')
+LM_STUDIO_BASE_URL = os.getenv('LM_STUDIO_BASE_URL', 'http://localhost:1234/v1')
 LM_STUDIO_MODEL = os.getenv('LM_STUDIO_MODEL', 'local-model')
 
 # In-memory storage for latest prediction data
@@ -328,10 +328,11 @@ def chat():
         # Add context to messages if we have any
         if context_parts:
             # Construct a clear, descriptive system instruction
+            context_string = "\n".join(context_parts)
             system_instruction = (
                 "You are AirSense AI, an advanced air quality assistant. "
-                "You have real-time access to 5 high-precision sensors. "
-                "Current data for sensors: \n" + "\n".join(sensor_contexts) + "\n\n"
+                "You have real-time access to high-precision sensors. "
+                "Current air quality data:\n" + context_string + "\n\n"
                 "When answering, refer to specific sensor data to give advice. "
                 "Analyze trends (Predictions) if available. Keep responses informative but direct."
             )
@@ -403,6 +404,165 @@ def chat():
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# Forecast endpoints
+@app.route('/api/forecast/<sensor_id>', methods=['GET'])
+def get_forecast(sensor_id):
+    """
+    Get forecast data for a specific sensor
+    
+    Query parameters:
+    - hours: Number of hours to forecast (default: 24)
+    - days: Number of days to forecast (default: 7)
+    """
+    try:
+        hours = int(request.args.get('hours', 24))
+        days = int(request.args.get('days', 7))
+        
+        # Get current sensor data
+        sensor_key = f"sensor_{sensor_id}" if not sensor_id.startswith('sensor_') else sensor_id
+        
+        sensor_data = None
+        if all_sensors_data.get('sensors') and sensor_key in all_sensors_data['sensors']:
+            sensor_data = all_sensors_data['sensors'][sensor_key]
+        elif latest_prediction['data'] is not None and sensor_key == 'sensor_3':
+            # Fallback to single sensor data
+            sensor_data = {
+                'aqi': latest_prediction['data'].get('aqi', 50),
+                'pollutants': {
+                    'pm2_5': latest_prediction['data'].get('pm25', 25),
+                    'pm10': latest_prediction['data'].get('pm10', 40),
+                }
+            }
+        
+        if not sensor_data:
+            return jsonify({
+                'status': 'no_data',
+                'message': f'No data available for {sensor_key}'
+            }), 404
+        
+        # Generate hourly forecast
+        hourly_forecast = []
+        base_pm25 = sensor_data['pollutants'].get('pm2_5', 25)
+        base_pm10 = sensor_data['pollutants'].get('pm10', 40)
+        base_aqi = sensor_data.get('aqi', 50)
+        
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        
+        for i in range(hours):
+            timestamp = now + timedelta(hours=i)
+            hour = timestamp.hour
+            
+            # Time-based variation (higher during rush hours)
+            variation = 1.0
+            if 6 <= hour < 9:  # Morning rush
+                variation = 1.3
+            elif 17 <= hour < 20:  # Evening rush
+                variation = 1.4
+            elif 22 <= hour or hour < 6:  # Night
+                variation = 0.8
+            
+            # Add some randomness
+            import random
+            random_factor = 0.85 + random.random() * 0.3
+            
+            pm25 = round(base_pm25 * variation * random_factor, 1)
+            pm10 = round(base_pm10 * variation * random_factor, 1)
+            
+            # Calculate AQI
+            aqi = _calculate_aqi_from_pm(pm25, pm10)
+            
+            hourly_forecast.append({
+                'timestamp': timestamp.isoformat(),
+                'hour': hour,
+                'aqi': aqi,
+                'pm25': pm25,
+                'pm10': pm10,
+                'category': _get_aqi_category(aqi)
+            })
+        
+        # Generate daily forecast
+        daily_forecast = []
+        for i in range(days):
+            timestamp = now + timedelta(days=i)
+            day_of_week = timestamp.weekday()
+            
+            # Weekday vs weekend variation
+            variation = 0.85 if day_of_week >= 5 else 1.1
+            random_factor = 0.8 + random.random() * 0.4
+            
+            pm25 = round(base_pm25 * variation * random_factor, 1)
+            pm10 = round(base_pm10 * variation * random_factor, 1)
+            aqi = _calculate_aqi_from_pm(pm25, pm10)
+            
+            daily_forecast.append({
+                'date': timestamp.strftime('%Y-%m-%d'),
+                'day_of_week': timestamp.strftime('%A'),
+                'aqi': aqi,
+                'pm25': pm25,
+                'pm10': pm10,
+                'category': _get_aqi_category(aqi)
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'sensor_id': sensor_key,
+            'timestamp': now.isoformat(),
+            'hourly': hourly_forecast,
+            'daily': daily_forecast
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error generating forecast: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def _calculate_aqi_from_pm(pm25, pm10):
+    """Calculate AQI from PM2.5 and PM10"""
+    aqi_pm25 = _pm25_to_aqi(pm25)
+    aqi_pm10 = _pm10_to_aqi(pm10)
+    return max(aqi_pm25, aqi_pm10)
+
+def _pm25_to_aqi(pm25):
+    """Convert PM2.5 to AQI"""
+    if pm25 <= 12.0:
+        return int((pm25 / 12.0) * 50)
+    elif pm25 <= 35.4:
+        return int(50 + ((pm25 - 12.0) / (35.4 - 12.0)) * 50)
+    elif pm25 <= 55.4:
+        return int(100 + ((pm25 - 35.4) / (55.4 - 35.4)) * 50)
+    elif pm25 <= 150.4:
+        return int(150 + ((pm25 - 55.4) / (150.4 - 55.4)) * 50)
+    else:
+        return 200
+
+def _pm10_to_aqi(pm10):
+    """Convert PM10 to AQI"""
+    if pm10 <= 54:
+        return int((pm10 / 54) * 50)
+    elif pm10 <= 154:
+        return int(50 + ((pm10 - 54) / (154 - 54)) * 50)
+    elif pm10 <= 254:
+        return int(100 + ((pm10 - 154) / (254 - 154)) * 50)
+    elif pm10 <= 354:
+        return int(150 + ((pm10 - 254) / (354 - 254)) * 50)
+    else:
+        return 200
+
+def _get_aqi_category(aqi):
+    """Get AQI category name"""
+    if aqi <= 50:
+        return 'Good'
+    elif aqi <= 100:
+        return 'Moderate'
+    elif aqi <= 150:
+        return 'Unhealthy for Sensitive Groups'
+    elif aqi <= 200:
+        return 'Unhealthy'
+    elif aqi <= 300:
+        return 'Very Unhealthy'
+    else:
+        return 'Hazardous'
 
 # Test endpoint for LM Studio connection
 @app.route('/api/test-llm', methods=['GET'])
