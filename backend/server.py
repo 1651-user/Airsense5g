@@ -287,13 +287,16 @@ def chat():
                     if environmental.get('humidity'): sensor_parts.append(f"Humidity={environmental['humidity']}%")
                     if environmental.get('pressure'): sensor_parts.append(f"Pressure={environmental['pressure']}mb")
                     
-                    # Predictions (if available)
+                    # Predictions (if available) - CRITICAL for AI to answer "what are predictions"
                     if predictions:
                         pred_parts = []
-                        if predictions.get('pm2_5'): pred_parts.append(f"PM2.5→{predictions['pm2_5']}")
-                        if predictions.get('pm10'): pred_parts.append(f"PM10→{predictions['pm10']}")
+                        if predictions.get('PM2.5'): pred_parts.append(f"PM2.5→{predictions['PM2.5'].get('predicted')}")
+                        if predictions.get('PM10'): pred_parts.append(f"PM10→{predictions['PM10'].get('predicted')}")
+                        if predictions.get('CO2'): pred_parts.append(f"CO2→{predictions['CO2'].get('predicted')}")
+                        if predictions.get('TVOC'): pred_parts.append(f"TVOC→{predictions['TVOC'].get('predicted')}")
+                        if predictions.get('Temperature'): pred_parts.append(f"Temp→{predictions['Temperature'].get('predicted')}")
                         if pred_parts:
-                            sensor_parts.append(f"Predictions:[{','.join(pred_parts)}]")
+                            sensor_parts.append(f"PREDICTIONS:[{','.join(pred_parts)}]")
                     
                     sensor_contexts.append(", ".join(sensor_parts))
                 
@@ -322,6 +325,15 @@ def chat():
                     if 'humidity' in sd: curr.append(f"H={sd['humidity']}")
                     if curr:
                         parts.append(",".join(curr))
+                
+                # Add Predictions for single sensor fallback
+                if 'predictions' in pred_data and pred_data['predictions']:
+                    preds = pred_data['predictions']
+                    p_list = []
+                    if 'PM2.5' in preds: p_list.append(f"PM2.5→{preds['PM2.5'].get('predicted')}")
+                    if 'CO2' in preds: p_list.append(f"CO2→{preds['CO2'].get('predicted')}")
+                    if p_list:
+                        parts.append(f"PREDICTIONS:[{','.join(p_list)}]")
                 
                 context_parts.extend(parts)
         
